@@ -36,13 +36,15 @@
       </div>
 
       <div class="card hidden" id="liveCard">
-        <div class="flex-between">
+        <div class="flex-between" style="flex-wrap:wrap; gap:8px;">
           <h2 class="mb-0">Live Attendance</h2>
           <span class="badge badge-success" id="presentCount">0 present</span>
         </div>
+        <input id="studentSearch" placeholder="Search student by name or phone…" class="mt-16" />
+        <p class="text-muted mt-8" style="font-size:12px;">No good phone to scan? Use "Mark Present" to mark them manually — it's flagged as a manual entry everywhere attendance is shown.</p>
         <div class="table-wrap mt-16">
           <table>
-            <thead><tr><th>Student</th><th>Status</th><th>Marked At</th></tr></thead>
+            <thead><tr><th>Student</th><th>Status</th><th>Marked At</th><th></th></tr></thead>
             <tbody id="liveBody"></tbody>
           </table>
         </div>
@@ -57,6 +59,7 @@
     let liveInterval = null;
     let countdownInterval = null;
     let qrInstance = null;
+    let liveStudents = [];
 
     async function loadBatches() {
       const batches = await Api.request("tutor", "/tutor/batches");
@@ -117,19 +120,53 @@
       if (!currentSession) return;
       try {
         const data = await Api.request("tutor", `/attendance/batch/${currentSession.batch_id}`);
+        liveStudents = data.students;
         const present = data.students.filter((s) => s.status === "present");
         document.getElementById("presentCount").textContent = `${present.length} / ${data.students.length} present`;
-        document.getElementById("liveBody").innerHTML = data.students.map((s) => `
-          <tr>
-            <td>${escapeHtml(s.name)}</td>
-            <td>${s.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-muted">Not yet</span>`}</td>
-            <td>${s.timestamp || "-"}</td>
-          </tr>
-        `).join("");
+        renderLiveTable();
       } catch (err) {
         // non-fatal; keep polling
       }
     }
+
+    function renderLiveTable() {
+      const query = document.getElementById("studentSearch").value.trim().toLowerCase();
+      const filtered = query
+        ? liveStudents.filter((s) => s.name.toLowerCase().includes(query) || (s.phone || "").includes(query))
+        : liveStudents;
+
+      if (filtered.length === 0) {
+        document.getElementById("liveBody").innerHTML = `<tr><td colspan="4" class="text-muted">No students match "${escapeHtml(query)}".</td></tr>`;
+        return;
+      }
+
+      document.getElementById("liveBody").innerHTML = filtered.map((s) => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>
+            ${s.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-muted">Not yet</span>`}
+            ${s.source === "manual" ? `<span class="badge badge-warning">Manual</span>` : ""}
+          </td>
+          <td>${s.timestamp || "-"}</td>
+          <td>${s.status === "present" ? "" : `<button class="btn btn-secondary btn-sm" onclick="markManual('${s.student_id}')">${iconSvg("check-circle")} Mark Present</button>`}</td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("studentSearch").addEventListener("input", renderLiveTable);
+
+    window.markManual = async (studentId) => {
+      if (!currentSession) return;
+      try {
+        await Api.request("tutor", "/attendance/mark-manual", {
+          method: "POST",
+          body: { batch_id: currentSession.batch_id, student_id: studentId },
+        });
+        await refreshLive();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    };
 
     function endSessionUi() {
       clearTimeout(qrRotateTimeout);

@@ -77,7 +77,10 @@
           <td>${r.date}</td>
           <td>${escapeHtml(r.batch_name)}</td>
           <td>${escapeHtml(r.student_name)}</td>
-          <td>${r.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-danger">Absent</span>`}</td>
+          <td>
+            ${r.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-danger">Absent</span>`}
+            ${r.source === "manual" ? `<span class="badge badge-warning">Manual</span>` : ""}
+          </td>
           <td>${r.timestamp || "-"}</td>
           <td>${r.distance_m != null ? Math.round(r.distance_m) : "-"}</td>
         </tr>

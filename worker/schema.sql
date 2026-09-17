@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   geo_long           REAL,
   distance_m         REAL,
   device_fingerprint TEXT,
+  source             TEXT NOT NULL DEFAULT 'self', -- self (QR/PIN) | manual (tutor override)
   UNIQUE (student_id, batch_id, date)
 );
 

@@ -215,7 +215,7 @@ attendance.get("/batch/:id", requireAuth("tutor", "admin"), async (c) => {
   const date = c.req.query("date") || new Date().toISOString().slice(0, 10);
 
   const { results } = await c.env.DB.prepare(
-    `SELECT s.id as student_id, s.name, s.phone, a.status, a.timestamp, a.distance_m
+    `SELECT s.id as student_id, s.name, s.phone, a.status, a.timestamp, a.distance_m, a.source
      FROM batch_students bs
      JOIN students s ON s.id = bs.student_id
      LEFT JOIN attendance a ON a.student_id = s.id AND a.batch_id = bs.batch_id AND a.date = ?
@@ -224,6 +224,42 @@ attendance.get("/batch/:id", requireAuth("tutor", "admin"), async (c) => {
   ).bind(date, batchId).all();
 
   return ok(c, { batch_id: batchId, date, students: results });
+});
+
+// ---------------------------------------------------------------------------
+// POST /attendance/mark-manual — tutor/admin manually marks a student
+// present, for students who can't scan (no working phone, camera issues,
+// etc). Bypasses QR/geo/device checks entirely, so it's clearly flagged
+// with source='manual' everywhere attendance is displayed or exported.
+// ---------------------------------------------------------------------------
+attendance.post("/mark-manual", requireAuth("tutor", "admin"), async (c) => {
+  const { batch_id, student_id, date } = await c.req.json<{
+    batch_id: string; student_id: string; date?: string;
+  }>();
+  if (!batch_id || !student_id) return fail(c, "batch_id and student_id are required", 400);
+
+  const jwt = c.get("jwtPayload");
+  if (jwt.role === "tutor") {
+    const batch = await c.env.DB.prepare("SELECT id FROM batches WHERE id = ? AND tutor_id = ?")
+      .bind(batch_id, jwt.sub).first();
+    if (!batch) return fail(c, "Batch not found or not assigned to you", 403);
+  }
+
+  const membership = await c.env.DB.prepare(
+    "SELECT 1 FROM batch_students WHERE batch_id = ? AND student_id = ?"
+  ).bind(batch_id, student_id).first();
+  if (!membership) return fail(c, "Student is not enrolled in this batch", 404);
+
+  const markDate = date || new Date().toISOString().slice(0, 10);
+  const id = newId("att");
+  await c.env.DB.prepare(
+    `INSERT INTO attendance (id, student_id, batch_id, date, status, timestamp, source)
+     VALUES (?, ?, ?, ?, 'present', datetime('now'), 'manual')
+     ON CONFLICT (student_id, batch_id, date)
+     DO UPDATE SET status = 'present', timestamp = datetime('now'), source = 'manual'`
+  ).bind(id, student_id, batch_id, markDate).run();
+
+  return ok(c, { student_id, batch_id, date: markDate, status: "present" }, 201);
 });
 
 export default attendance;

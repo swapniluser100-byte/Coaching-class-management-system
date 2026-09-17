@@ -395,7 +395,7 @@ admin.get("/attendance/report", async (c) => {
 
   let query = `
     SELECT a.id, a.student_id, s.name as student_name, a.batch_id, b.name as batch_name,
-           a.date, a.status, a.timestamp, a.distance_m
+           a.date, a.status, a.timestamp, a.distance_m, a.source
     FROM attendance a
     JOIN students s ON s.id = a.student_id
     JOIN batches b ON b.id = a.batch_id
@@ -413,7 +413,7 @@ admin.get("/attendance/report", async (c) => {
 admin.get("/attendance/export.csv", async (c) => {
   const batchId = c.req.query("batch_id");
   let query = `
-    SELECT a.date, b.name as batch_name, s.name as student_name, s.phone, a.status, a.timestamp
+    SELECT a.date, b.name as batch_name, s.name as student_name, s.phone, a.status, a.timestamp, a.source
     FROM attendance a
     JOIN students s ON s.id = a.student_id
     JOIN batches b ON b.id = a.batch_id
@@ -424,10 +424,10 @@ admin.get("/attendance/export.csv", async (c) => {
 
   const { results } = await c.env.DB.prepare(query).bind(...binds).all();
 
-  const header = "Date,Batch,Student,Phone,Status,Timestamp";
+  const header = "Date,Batch,Student,Phone,Status,Timestamp,Source";
   const escapeCsv = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const rows = (results as Record<string, unknown>[]).map((r) =>
-    [r.date, r.batch_name, r.student_name, r.phone, r.status, r.timestamp].map(escapeCsv).join(",")
+    [r.date, r.batch_name, r.student_name, r.phone, r.status, r.timestamp, r.source].map(escapeCsv).join(",")
   );
   const csv = [header, ...rows].join("\n");
 
