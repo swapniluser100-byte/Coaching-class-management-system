@@ -21,10 +21,18 @@
         <select id="examSelect"></select>
       </div>
       <div class="card hidden" id="marksCard">
-        <div class="flex-between">
+        <div class="flex-between" style="flex-wrap:wrap; gap:8px;">
           <h2 class="mb-0" id="examHeading"></h2>
-          <button class="btn" id="saveBtn">${iconSvg("save")} Save Marks</button>
+          <div class="flex gap-8" style="flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" id="downloadTemplateBtn">${iconSvg("download")} Download CSV</button>
+            <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+              ${iconSvg("upload")} Upload CSV
+              <input type="file" id="csvInput" accept=".csv" class="hidden" />
+            </label>
+            <button class="btn" id="saveBtn">${iconSvg("save")} Save Marks</button>
+          </div>
         </div>
+        <p class="text-muted mt-8" style="font-size:12px;">CSV columns: <code>phone, name, marks_obtained, remarks</code>. Matched by phone number.</p>
         <div class="table-wrap mt-16">
           <table>
             <thead><tr><th>Student</th><th>Marks</th><th>Remarks</th></tr></thead>
@@ -36,6 +44,7 @@
 
     let exams = [];
     let currentExam = null;
+    let currentStudents = [];
 
     async function loadExams() {
       exams = await Api.request("tutor", "/tutor/exams");
@@ -51,6 +60,7 @@
       document.getElementById("examHeading").textContent = `${currentExam.exam_name} — Total: ${currentExam.total_marks}`;
 
       const { students } = await Api.request("tutor", `/attendance/batch/${currentExam.batch_id}`);
+      currentStudents = students;
 
       const tbody = document.getElementById("marksBody");
       tbody.innerHTML = students.map((s) => `
@@ -85,6 +95,58 @@
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
+    });
+
+    document.getElementById("downloadTemplateBtn").addEventListener("click", () => {
+      if (!currentExam) return;
+      const rows = [["phone", "name", "marks_obtained", "remarks"]];
+      currentStudents.forEach((s) => rows.push([s.phone, s.name, "", ""]));
+      const safeName = currentExam.exam_name.replace(/[^a-z0-9]+/gi, "_");
+      downloadCsv(`${safeName}_marks_template.csv`, rows);
+    });
+
+    document.getElementById("csvInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      e.target.value = "";
+      if (!file || !currentExam) return;
+
+      const text = await file.text();
+      const rows = parseCsv(text).filter((r) => r.some((c) => c.trim() !== ""));
+      if (rows.length < 2) {
+        showAlert(document.getElementById("alertBox"), "CSV file has no data rows.");
+        return;
+      }
+
+      const header = rows[0].map((h) => h.trim().toLowerCase());
+      const phoneIdx = header.indexOf("phone");
+      const marksIdx = header.indexOf("marks_obtained");
+      const remarksIdx = header.indexOf("remarks");
+      if (phoneIdx === -1 || marksIdx === -1) {
+        showAlert(document.getElementById("alertBox"), `CSV must have "phone" and "marks_obtained" columns. Found: ${rows[0].join(", ")}`);
+        return;
+      }
+
+      const byPhone = {};
+      currentStudents.forEach((s) => { byPhone[s.phone.trim()] = s; });
+
+      let matched = 0;
+      const unmatched = [];
+      for (const r of rows.slice(1)) {
+        const phone = (r[phoneIdx] || "").trim();
+        if (!phone) continue;
+        const student = byPhone[phone];
+        if (!student) { unmatched.push(phone); continue; }
+        const row = document.querySelector(`#marksBody tr[data-student="${student.student_id}"]`);
+        if (!row) continue;
+        const marksVal = (r[marksIdx] ?? "").trim();
+        if (marksVal !== "") row.querySelector(".marksInput").value = marksVal;
+        if (remarksIdx !== -1) row.querySelector(".remarksInput").value = (r[remarksIdx] || "").trim();
+        matched++;
+      }
+
+      const msg = `Loaded ${matched} row(s) from the CSV into the table below — review, then click "Save Marks" to save.` +
+        (unmatched.length ? ` ${unmatched.length} phone number(s) weren't found in this batch: ${unmatched.join(", ")}.` : "");
+      showAlert(document.getElementById("alertBox"), msg, unmatched.length ? "info" : "success");
     });
 
     loadExams().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
