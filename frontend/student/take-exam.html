@@ -17,6 +17,18 @@
   .q-option input { width: 18px; height: 18px; flex-shrink: 0; }
   .q-option.correct { border-color: var(--color-success); background: var(--color-success-bg); }
   .q-option.incorrect { border-color: var(--color-danger); background: var(--color-danger-bg); }
+
+  .progress-track { height: 6px; border-radius: 999px; background: var(--color-border); overflow: hidden; margin: 10px 0 14px; }
+  .progress-fill { height: 100%; background: var(--color-primary); transition: width 0.2s ease; }
+
+  .q-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .q-nav-btn {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--color-border);
+    background: #fff; color: var(--color-text-muted); font-size: 13px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .q-nav-btn.answered { background: var(--color-success-bg); border-color: var(--color-success); color: var(--color-success); }
+  .q-nav-btn.current { outline: 2px solid var(--color-primary); outline-offset: 1px; color: var(--color-text); }
 </style>
 </head>
 <body>
@@ -32,8 +44,15 @@
       <div id="examCard" class="hidden">
         <div class="timer-bar" id="timerBar">${iconSvg("clock")} <span id="timerText">--:--</span> remaining</div>
         <h1 id="examTitle"></h1>
-        <div id="questionsList"></div>
-        <button class="btn btn-block mt-16" id="submitBtn">${iconSvg("check-circle")} Submit Exam</button>
+        <p class="text-muted mb-0" id="progressText" style="font-size:13px;"></p>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="q-nav" id="questionNav"></div>
+        <div id="questionCard"></div>
+        <div class="flex gap-8 mt-16">
+          <button class="btn btn-secondary" id="prevBtn" type="button">← Previous</button>
+          <button class="btn" id="nextBtn" type="button">Next →</button>
+        </div>
+        <button class="btn btn-block mt-16" id="submitBtn" type="button">${iconSvg("check-circle")} Submit Exam</button>
       </div>
       <div id="resultCard" class="hidden">
         <div class="card text-center">
@@ -52,6 +71,8 @@
 
     let attemptId = null;
     let questions = [];
+    let answersState = {}; // question_id -> array of selected letters, kept in sync locally for the nav dots
+    let currentIndex = 0;
     let deadlineAt = null;
     let timerInterval = null;
     let autoSubmitted = false;
@@ -62,33 +83,61 @@
       return q[`option_${letter.toLowerCase()}`];
     }
 
-    function renderQuestions(qs, existingAnswers) {
-      const answerByQ = {};
-      (existingAnswers || []).forEach((a) => { answerByQ[a.question_id] = (a.selected_options || "").split(",").filter(Boolean); });
-
-      document.getElementById("questionsList").innerHTML = qs.map((q, qi) => {
-        const inputType = q.question_type === "multi" ? "checkbox" : "radio";
-        const selected = answerByQ[q.id] || [];
-        const options = OPTION_LETTERS.filter((l) => optionLabel(q, l)).map((l) => `
-          <label class="q-option">
-            <input type="${inputType}" name="q_${q.id}" data-question="${q.id}" data-letter="${l}" ${selected.includes(l) ? "checked" : ""} />
-            <span>${escapeHtml(optionLabel(q, l))}</span>
-          </label>
-        `).join("");
-        return `
-          <div class="card">
-            <p class="text-muted mb-0" style="font-size:12px;">Question ${qi + 1} of ${qs.length} · ${q.marks} mark(s) · ${q.question_type === "multi" ? "Select all that apply" : "Select one"}</p>
-            <h3>${escapeHtml(q.question_text)}</h3>
-            ${options}
-          </div>
-        `;
-      }).join("");
+    function isAnswered(questionId) {
+      return (answersState[questionId] || []).length > 0;
     }
 
+    function renderNavigator() {
+      document.getElementById("questionNav").innerHTML = questions.map((q, qi) => `
+        <button type="button" class="q-nav-btn ${isAnswered(q.id) ? "answered" : ""} ${qi === currentIndex ? "current" : ""}" onclick="goToQuestion(${qi})">${qi + 1}</button>
+      `).join("");
+
+      const answeredCount = questions.filter((q) => isAnswered(q.id)).length;
+      document.getElementById("progressText").textContent = `Question ${currentIndex + 1} of ${questions.length} · ${answeredCount} of ${questions.length} answered`;
+      document.getElementById("progressFill").style.width = `${(answeredCount / questions.length) * 100}%`;
+    }
+
+    function renderCurrentQuestion() {
+      const q = questions[currentIndex];
+      const inputType = q.question_type === "multi" ? "checkbox" : "radio";
+      const selected = answersState[q.id] || [];
+      const options = OPTION_LETTERS.filter((l) => optionLabel(q, l)).map((l) => `
+        <label class="q-option">
+          <input type="${inputType}" name="q_${q.id}" data-question="${q.id}" data-letter="${l}" ${selected.includes(l) ? "checked" : ""} />
+          <span>${escapeHtml(optionLabel(q, l))}</span>
+        </label>
+      `).join("");
+
+      document.getElementById("questionCard").innerHTML = `
+        <div class="card">
+          <p class="text-muted mb-0" style="font-size:12px;">${q.marks} mark(s) · ${q.question_type === "multi" ? "Select all that apply" : "Select one"}</p>
+          <h3>${escapeHtml(q.question_text)}</h3>
+          ${options}
+        </div>
+      `;
+
+      document.getElementById("prevBtn").disabled = currentIndex === 0;
+      document.getElementById("nextBtn").classList.toggle("hidden", currentIndex === questions.length - 1);
+      renderNavigator();
+    }
+
+    window.goToQuestion = (index) => {
+      currentIndex = index;
+      renderCurrentQuestion();
+    };
+
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      if (currentIndex > 0) window.goToQuestion(currentIndex - 1);
+    });
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      if (currentIndex < questions.length - 1) window.goToQuestion(currentIndex + 1);
+    });
+
     async function saveAnswer(questionId) {
-      const q = questions.find((x) => x.id === questionId);
       const inputs = [...document.querySelectorAll(`input[data-question="${questionId}"]:checked`)];
       const selected_options = inputs.map((i) => i.dataset.letter);
+      answersState[questionId] = selected_options;
+      renderNavigator();
       try {
         await Api.request("student", `/student/exam/attempt/${attemptId}/answer`, {
           method: "POST",
@@ -152,7 +201,13 @@
     }
 
     async function submitExam(silent) {
-      if (!silent && !confirm("Submit the exam? You won't be able to change your answers after this.")) return;
+      if (!silent) {
+        const unanswered = questions.length - questions.filter((q) => isAnswered(q.id)).length;
+        const msg = unanswered > 0
+          ? `You still have ${unanswered} unanswered question(s). Submit anyway? You won't be able to change your answers after this.`
+          : "Submit the exam? You won't be able to change your answers after this.";
+        if (!confirm(msg)) return;
+      }
       try {
         const data = await Api.request("student", `/student/exam/attempt/${attemptId}/submit`, { method: "POST" });
         clearInterval(timerInterval);
@@ -180,10 +235,16 @@
         questions = data.questions;
         deadlineAt = data.deadline_at;
 
+        answersState = {};
+        (data.answers || []).forEach((a) => {
+          answersState[a.question_id] = (a.selected_options || "").split(",").filter(Boolean);
+        });
+
         document.getElementById("loadingText").classList.add("hidden");
         document.getElementById("examCard").classList.remove("hidden");
         document.getElementById("examTitle").textContent = data.exam_name;
-        renderQuestions(questions, data.answers);
+        currentIndex = 0;
+        renderCurrentQuestion();
         startTimer();
       } catch (err) {
         document.getElementById("loadingText").classList.add("hidden");
