@@ -26,6 +26,17 @@
           <input id="brandColorHex" placeholder="#3654e0" style="max-width:140px;" />
         </div>
         <button class="btn mt-16" id="saveGeneralBtn">Save</button>
+
+        <label class="mt-16" style="display:block;">Logo</label>
+        <div class="flex gap-8" style="align-items:center;">
+          <img id="logoPreview" class="hidden" alt="Logo" style="height:48px; max-width:160px; object-fit:contain; border:1px solid var(--color-border); border-radius:8px; padding:4px;" />
+          <span id="noLogoText" class="text-muted" style="font-size:13px;">No logo uploaded — the emoji icon is used by default.</span>
+        </div>
+        <input type="file" id="logoInput" accept="image/*" class="hidden" />
+        <div class="flex gap-8 mt-8">
+          <button class="btn btn-secondary" type="button" id="uploadLogoBtn">Upload Logo</button>
+          <button class="btn btn-danger hidden" type="button" id="removeLogoBtn">Remove Logo</button>
+        </div>
       </div>
       <div class="card">
         <h2>API Connection</h2>
@@ -46,16 +57,63 @@
     `);
     setPageTitle("Settings");
 
+    function refreshLogoPreview(logoUrl) {
+      const img = document.getElementById("logoPreview");
+      const noText = document.getElementById("noLogoText");
+      const removeBtn = document.getElementById("removeLogoBtn");
+      if (logoUrl) {
+        img.src = `${window.API_BASE_URL}${logoUrl}`;
+        img.classList.remove("hidden");
+        noText.classList.add("hidden");
+        removeBtn.classList.remove("hidden");
+      } else {
+        img.classList.add("hidden");
+        noText.classList.remove("hidden");
+        removeBtn.classList.add("hidden");
+      }
+    }
+
     (async () => {
       try {
         const settings = await Api.request(null, "/public/settings");
         document.getElementById("tuitionName").value = settings.tuition_name;
         document.getElementById("brandColor").value = settings.brand_color;
         document.getElementById("brandColorHex").value = settings.brand_color;
+        refreshLogoPreview(settings.logo_url);
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
     })();
+
+    document.getElementById("uploadLogoBtn").addEventListener("click", () => {
+      document.getElementById("logoInput").click();
+    });
+    document.getElementById("logoInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const alertBox = document.getElementById("alertBox");
+      try {
+        const data = await Api.request("admin", "/admin/settings/logo", { method: "POST", body: file, isForm: true });
+        Branding.applyLogo(data.logo_url);
+        refreshLogoPreview(data.logo_url);
+        showAlert(alertBox, "Logo updated.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
+    document.getElementById("removeLogoBtn").addEventListener("click", async () => {
+      if (!confirm("Remove the uploaded logo? Pages will fall back to the default emoji icon.")) return;
+      const alertBox = document.getElementById("alertBox");
+      try {
+        await Api.request("admin", "/admin/settings/logo/remove", { method: "POST" });
+        Branding.applyLogo(null);
+        refreshLogoPreview(null);
+        showAlert(alertBox, "Logo removed.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
 
     document.getElementById("brandColor").addEventListener("input", (e) => {
       document.getElementById("brandColorHex").value = e.target.value;

@@ -1,9 +1,11 @@
-// Loads the admin-configured tuition name + brand color and applies them
-// app-wide: the brand color overrides the --color-primary CSS variable (used
-// everywhere buttons, links and active nav states already draw their color
-// from), and the tuition name is written into any element marked
-// [data-brand-name]. A data-brand-name attribute value, if set, is appended
-// as a suffix (e.g. data-brand-name="Admin" -> "Sharma's Classes Admin").
+// Loads the admin-configured tuition name, brand color and logo, and applies
+// them app-wide: the brand color overrides the --color-primary CSS variable
+// (used everywhere buttons, links and active nav states already draw their
+// color from), the tuition name is written into any element marked
+// [data-brand-name] (a data-brand-name attribute value, if set, is appended
+// as a suffix, e.g. data-brand-name="Admin" -> "Sharma's Classes Admin"),
+// and a configured logo swaps in for the paired [data-brand-icon] emoji at
+// every [data-brand-logo] <img>.
 
 const Branding = (() => {
   let loadPromise = null;
@@ -33,6 +35,21 @@ const Branding = (() => {
     });
   }
 
+  function applyLogo(logoUrl) {
+    document.querySelectorAll("[data-brand-logo]").forEach((el) => {
+      if (logoUrl) {
+        el.src = `${window.API_BASE_URL}${logoUrl}`;
+        el.classList.remove("hidden");
+      } else {
+        el.removeAttribute("src");
+        el.classList.add("hidden");
+      }
+    });
+    document.querySelectorAll("[data-brand-icon]").forEach((el) => {
+      el.classList.toggle("hidden", !!logoUrl);
+    });
+  }
+
   function load() {
     if (!loadPromise) {
       loadPromise = fetch(`${window.API_BASE_URL}/public/settings`, { cache: "no-store" })
@@ -41,6 +58,7 @@ const Branding = (() => {
           const data = json.success ? json.data : {};
           applyColor(data.brand_color);
           applyName(data.tuition_name);
+          applyLogo(data.logo_url);
           return data;
         })
         .catch(() => ({}));
@@ -48,7 +66,7 @@ const Branding = (() => {
     return loadPromise;
   }
 
-  return { load, applyName, applyColor };
+  return { load, applyName, applyColor, applyLogo };
 })();
 
 Branding.load();

@@ -36,7 +36,7 @@ function renderAdminShell(activeHref, innerHtml) {
   document.body.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand">📚 <span data-brand-name="Admin">Tuition Admin</span></div>
+        <div class="brand"><span data-brand-icon>📚</span><img data-brand-logo class="hidden" alt="Logo" style="height:20px; vertical-align:-4px; margin-right:4px;" /> <span data-brand-name="Admin">Tuition Admin</span></div>
         <nav>${navHtml}</nav>
         <div style="margin-top:24px; padding: 0 12px;">
           <button class="btn btn-secondary btn-block" id="logoutBtn">Log out</button>
@@ -61,7 +61,7 @@ function renderAdminShell(activeHref, innerHtml) {
     Api.clearToken("admin");
     window.location.href = "index.html";
   });
-  Branding.load().then((d) => Branding.applyName(d.tuition_name));
+  Branding.load().then((d) => { Branding.applyName(d.tuition_name); Branding.applyLogo(d.logo_url); });
 }
 
 function setPageTitle(title) {

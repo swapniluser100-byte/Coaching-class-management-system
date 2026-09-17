@@ -4,6 +4,7 @@ import { ok, fail } from "../lib/response";
 import { requireAuth } from "../middleware/auth";
 import { hashPassword, verifyPassword, newId, randomExamCode } from "../lib/crypto";
 import { issueJwt } from "../lib/jwt";
+import { LOGO_R2_KEY } from "./public";
 
 const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -661,6 +662,28 @@ admin.post("/settings/update", async (c) => {
   }
 
   return ok(c, { updated: updates.map(([key]) => key) });
+});
+
+admin.post("/settings/logo", async (c) => {
+  const contentType = c.req.header("Content-Type") || "application/octet-stream";
+  if (!contentType.startsWith("image/")) return fail(c, "Only image uploads are allowed", 400);
+
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength === 0) return fail(c, "Empty file", 400);
+  if (body.byteLength > 2 * 1024 * 1024) return fail(c, "Logo too large (max 2MB)", 400);
+
+  await c.env.PHOTOS_BUCKET.put(LOGO_R2_KEY, body, { httpMetadata: { contentType } });
+  const updatedAt = new Date().toISOString();
+  await c.env.DB.prepare("INSERT INTO settings (key, value) VALUES ('logo_updated_at', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+    .bind(updatedAt).run();
+
+  return ok(c, { logo_url: `/public/logo?v=${encodeURIComponent(updatedAt)}` });
+});
+
+admin.post("/settings/logo/remove", async (c) => {
+  await c.env.PHOTOS_BUCKET.delete(LOGO_R2_KEY);
+  await c.env.DB.prepare("DELETE FROM settings WHERE key = 'logo_updated_at'").run();
+  return ok(c, { removed: true });
 });
 
 export default admin;
