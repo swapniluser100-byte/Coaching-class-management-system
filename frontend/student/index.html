@@ -44,6 +44,13 @@
     const alertBox = document.getElementById("alertBox");
     let currentPhone = "";
 
+    const returnTo = new URLSearchParams(location.search).get("return") || "dashboard.html";
+
+    // Already logged in (e.g. tapped a QR deep link while still signed in) — skip straight through.
+    if (Api.getToken("student")) {
+      window.location.href = returnTo;
+    }
+
     document.getElementById("phoneForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = document.getElementById("sendOtpBtn");
@@ -82,7 +89,7 @@
           body: { phone: currentPhone, otp: document.getElementById("otp").value.trim(), device_fingerprint: deviceFingerprint },
         });
         Api.setToken("student", data.token);
-        window.location.href = "dashboard.html";
+        window.location.href = returnTo;
       } catch (err) {
         alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
       } finally {

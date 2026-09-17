@@ -85,12 +85,30 @@
       rafId = requestAnimationFrame(tick);
     }
 
+    function extractPayload(raw) {
+      // The QR encodes a URL (student/scan.html?session_id=...&batch_id=...&token=...)
+      // so a phone's native camera app can open it directly. Support plain
+      // JSON too, in case an older QR is still on screen somewhere.
+      try {
+        const url = new URL(raw);
+        const p = {
+          session_id: url.searchParams.get("session_id"),
+          batch_id: url.searchParams.get("batch_id"),
+          token: url.searchParams.get("token"),
+        };
+        if (p.session_id && p.batch_id && p.token) return p;
+      } catch {}
+      try {
+        const p = JSON.parse(raw);
+        if (p.session_id && p.batch_id && p.token) return p;
+      } catch {}
+      return null;
+    }
+
     async function onQrDecoded(raw) {
       scanning = false;
-      let payload;
-      try {
-        payload = JSON.parse(raw);
-      } catch {
+      const payload = extractPayload(raw);
+      if (!payload) {
         statusText.textContent = "That QR code isn't recognized. Point at the attendance QR.";
         scanning = true;
         rafId = requestAnimationFrame(tick);
@@ -134,10 +152,10 @@
       }
     }
 
-    function showResult(success, title, message) {
+    function showResult(success, title, message, icon) {
       document.getElementById("scannerCard").classList.add("hidden");
       document.getElementById("resultCard").classList.remove("hidden");
-      document.getElementById("resultIcon").textContent = success ? "✅" : "⚠️";
+      document.getElementById("resultIcon").textContent = icon || (success ? "✅" : "⚠️");
       document.getElementById("resultTitle").textContent = title;
       document.getElementById("resultMessage").textContent = message;
     }
@@ -149,7 +167,26 @@
       startCamera();
     });
 
-    startCamera();
+    // The QR also encodes a plain URL (this page + session_id/batch_id/token
+    // as query params) so a phone's native camera app can open it directly —
+    // scanning with the native camera otherwise just shows raw JSON text with
+    // nothing to "open". If those params are present, skip the in-page camera
+    // scanner entirely and mark attendance straight away.
+    const deepLinkParams = new URLSearchParams(location.search);
+    const deepLinkPayload = ["session_id", "batch_id", "token"].every((k) => deepLinkParams.get(k))
+      ? {
+          session_id: deepLinkParams.get("session_id"),
+          batch_id: deepLinkParams.get("batch_id"),
+          token: deepLinkParams.get("token"),
+        }
+      : null;
+
+    if (deepLinkPayload) {
+      showResult(true, "Marking Attendance…", "Please wait while we verify your location.", "⏳");
+      markAttendance(deepLinkPayload);
+    } else {
+      startCamera();
+    }
     window.addEventListener("beforeunload", stopCamera);
   </script>
 </body>

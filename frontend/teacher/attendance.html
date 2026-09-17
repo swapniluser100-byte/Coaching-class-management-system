@@ -69,12 +69,16 @@
       if (!currentSession) return;
       try {
         const data = await Api.request("tutor", `/qr/current?session_id=${currentSession.session_id}`);
-        const payload = JSON.stringify({
+        // Encode a real URL (not just JSON) so a phone's native camera app
+        // can open it directly and land on the student scan page with the
+        // token pre-filled — scanning raw JSON with a generic camera app
+        // has nothing to "open" and just shows the text.
+        const params = new URLSearchParams({
           session_id: data.session_id,
           batch_id: data.batch_id,
           token: data.token,
-          expires_at: data.expires_at,
         });
+        const payload = `${location.origin}/student/scan.html?${params.toString()}`;
         if (!qrInstance) {
           document.getElementById("qrCanvas").innerHTML = "";
           qrInstance = new QRCode(document.getElementById("qrCanvas"), {

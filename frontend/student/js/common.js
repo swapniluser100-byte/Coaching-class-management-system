@@ -8,7 +8,10 @@ const STUDENT_NAV = [
 function requireStudentAuth() {
   const token = Api.getToken("student");
   if (!token) {
-    window.location.href = "index.html";
+    // Preserve the page + query string (e.g. a QR deep link's session/token
+    // params) so login can send the student straight back to it.
+    const returnTo = location.pathname.split("/").pop() + location.search;
+    window.location.href = `index.html?return=${encodeURIComponent(returnTo)}`;
     throw new Error("redirecting");
   }
   return token;
