@@ -82,10 +82,12 @@
           <td>${s.device_fingerprint ? `<span class="badge badge-success">Bound</span>` : `<span class="badge badge-muted">Not bound</span>`}</td>
           <td>${s.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
           <td>
-            <button class="btn btn-secondary btn-sm" onclick="editStudent('${s.id}')">Edit</button>
-            <button class="btn btn-secondary btn-sm" onclick="uploadPhoto('${s.id}')">Photo</button>
-            ${s.device_fingerprint ? `<button class="btn btn-secondary btn-sm" onclick="resetDevice('${s.id}')">Reset Device</button>` : ""}
-            <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
+            <div class="icon-row">
+              ${iconButton({ icon: "edit", title: "Edit", onclick: `editStudent('${s.id}')` })}
+              ${iconButton({ icon: "camera", title: "Upload Photo", onclick: `uploadPhoto('${s.id}')` })}
+              ${s.device_fingerprint ? iconButton({ icon: "reset", title: "Reset Device", onclick: `resetDevice('${s.id}')` }) : ""}
+              ${iconButton({ icon: "trash", title: "Delete", onclick: `deleteStudent('${s.id}')`, variant: "danger" })}
+            </div>
           </td>
         </tr>
       `).join("");

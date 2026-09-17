@@ -107,8 +107,10 @@
           <td>${b.classroom_lat != null ? `<span class="badge badge-success">Set (${b.geo_radius_m}m)</span>` : `<span class="badge badge-muted">Not set</span>`}</td>
           <td>${b.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
           <td>
-            <button class="btn btn-secondary btn-sm" onclick="editBatch('${b.id}')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteBatch('${b.id}')">Delete</button>
+            <div class="icon-row">
+              ${iconButton({ icon: "edit", title: "Edit", onclick: `editBatch('${b.id}')` })}
+              ${iconButton({ icon: "trash", title: "Delete", onclick: `deleteBatch('${b.id}')`, variant: "danger" })}
+            </div>
           </td>
         </tr>
       `).join("");

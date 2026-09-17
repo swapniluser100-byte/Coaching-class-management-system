@@ -72,10 +72,11 @@
           <td>${escapeHtml(batchName(e.batch_id))}</td>
           <td>${e.exam_date}</td>
           <td>${e.total_marks}</td>
-          <td><code style="font-weight:700; letter-spacing:0.05em;">${e.exam_code}</code>
-            <button class="btn btn-secondary btn-sm" onclick="copyCode('${e.exam_code}')">Copy</button>
+          <td class="flex gap-8" style="align-items:center;">
+            <code style="font-weight:700; letter-spacing:0.05em;">${e.exam_code}</code>
+            ${iconButton({ icon: "copy", title: "Copy Code", onclick: `copyCode('${e.exam_code}')` })}
           </td>
-          <td><a href="marks.html?exam_id=${e.id}" class="btn btn-secondary btn-sm">Upload Marks</a></td>
+          <td>${iconButton({ icon: "upload", title: "Upload Marks", href: `marks.html?exam_id=${e.id}` })}</td>
         </tr>
       `).join("");
     }

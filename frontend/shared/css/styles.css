@@ -180,6 +180,31 @@ input:focus, select:focus, textarea:focus {
 .btn-block { width: 100%; }
 .btn-sm { padding: 6px 10px; font-size: 13px; }
 
+/* ---- Icon buttons (table row actions) ---- */
+.icon-row { display: flex; gap: 6px; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.icon-btn svg { width: 15px; height: 15px; }
+.icon-btn:hover { background: var(--color-bg); color: var(--color-text); text-decoration: none; }
+.icon-btn-danger { color: var(--color-danger); }
+.icon-btn-danger:hover { background: var(--color-danger-bg); border-color: var(--color-danger-bg); }
+.icon-btn-success { color: var(--color-success); }
+.icon-btn-success:hover { background: var(--color-success-bg); border-color: var(--color-success-bg); }
+.icon-btn-warning { color: var(--color-warning); }
+.icon-btn-warning:hover { background: var(--color-warning-bg); border-color: var(--color-warning-bg); }
+
 /* ---- Table ---- */
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--color-border); }

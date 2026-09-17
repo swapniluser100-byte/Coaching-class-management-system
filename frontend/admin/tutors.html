@@ -64,9 +64,11 @@
           <td>${t.can_upload_marks ? `<span class="badge badge-success">Yes</span>` : `<span class="badge badge-muted">No</span>`}</td>
           <td>${t.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
           <td>
-            <button class="btn btn-secondary btn-sm" onclick="editTutor('${t.id}')">Edit</button>
-            <button class="btn btn-secondary btn-sm" onclick="toggleActive('${t.id}', ${t.active ? 0 : 1})">${t.active ? "Deactivate" : "Activate"}</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteTutor('${t.id}')">Delete</button>
+            <div class="icon-row">
+              ${iconButton({ icon: "edit", title: "Edit", onclick: `editTutor('${t.id}')` })}
+              ${iconButton({ icon: "power", title: t.active ? "Deactivate" : "Activate", onclick: `toggleActive('${t.id}', ${t.active ? 0 : 1})`, variant: t.active ? "warning" : "success" })}
+              ${iconButton({ icon: "trash", title: "Delete", onclick: `deleteTutor('${t.id}')`, variant: "danger" })}
+            </div>
           </td>
         </tr>
       `).join("");
