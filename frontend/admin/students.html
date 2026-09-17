@@ -47,8 +47,8 @@
           </div>
           <div class="table-wrap mt-16">
             <table>
-              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Device</th><th>Status</th><th></th></tr></thead>
-              <tbody id="studentsBody"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
+              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Batch</th><th>Device</th><th>Status</th><th></th></tr></thead>
+              <tbody id="studentsBody"><tr><td colspan="8" class="text-muted">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -69,7 +69,7 @@
     function renderStudents(list) {
       const tbody = document.getElementById("studentsBody");
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-muted">No students yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-muted">No students yet.</td></tr>`;
         return;
       }
       tbody.innerHTML = list.map((s) => `
@@ -78,6 +78,7 @@
           <td>${escapeHtml(s.name)}</td>
           <td>${escapeHtml(s.phone)}</td>
           <td>${escapeHtml(s.class_level || "-")}</td>
+          <td>${s.batch_name ? escapeHtml(s.batch_name) : `<span class="badge badge-muted">Unassigned</span>`}</td>
           <td>${s.device_fingerprint ? `<span class="badge badge-success">Bound</span>` : `<span class="badge badge-muted">Not bound</span>`}</td>
           <td>${s.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
           <td>
@@ -129,6 +130,7 @@
       document.getElementById("phone").value = s.phone;
       document.getElementById("parentPhone").value = s.parent_phone || "";
       document.getElementById("classLevel").value = s.class_level || "11th";
+      document.getElementById("batchId").value = s.batch_id || "";
       document.getElementById("formTitle").textContent = "Edit Student";
       window.scrollTo({ top: 0, behavior: "smooth" });
     };

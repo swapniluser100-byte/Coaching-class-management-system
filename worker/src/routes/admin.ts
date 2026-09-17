@@ -54,7 +54,10 @@ admin.use("/*", requireAuth("admin"));
 // ---------------------------------------------------------------------------
 admin.get("/students", async (c) => {
   const { results } = await c.env.DB.prepare(
-    "SELECT id, name, phone, parent_phone, class_level, photo_url, device_fingerprint, active, created_at FROM students ORDER BY created_at DESC"
+    `SELECT s.id, s.name, s.phone, s.parent_phone, s.class_level, s.photo_url, s.device_fingerprint, s.active, s.created_at,
+       (SELECT bs.batch_id FROM batch_students bs WHERE bs.student_id = s.id ORDER BY bs.created_at DESC LIMIT 1) as batch_id,
+       (SELECT b.name FROM batch_students bs JOIN batches b ON b.id = bs.batch_id WHERE bs.student_id = s.id ORDER BY bs.created_at DESC LIMIT 1) as batch_name
+     FROM students s ORDER BY s.created_at DESC`
   ).all();
   return ok(c, results);
 });
