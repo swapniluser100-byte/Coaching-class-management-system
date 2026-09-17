@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>My Batches · Teacher</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireTeacherAuth();
+    renderTeacherShell("dashboard.html", `
+      <h1>My Batches</h1>
+      <div id="alertBox"></div>
+      <div class="grid grid-2" id="batchGrid"></div>
+    `);
+
+    (async () => {
+      try {
+        const batches = await Api.request("tutor", "/tutor/batches");
+        const grid = document.getElementById("batchGrid");
+        if (batches.length === 0) {
+          grid.innerHTML = `<p class="text-muted">No batches assigned to you yet. Contact your admin.</p>`;
+          return;
+        }
+        grid.innerHTML = batches.map((b) => `
+          <div class="card">
+            <h3>${escapeHtml(b.name)}</h3>
+            <p>${escapeHtml(b.subject || "")} · ${escapeHtml(b.class_level)}</p>
+            <p class="text-muted" style="font-size:13px;">${escapeHtml(b.schedule_days || "")} ${escapeHtml(b.schedule_time || "")}</p>
+            <div class="flex-between mt-16">
+              <span class="badge badge-muted">${b.strength} students</span>
+              <a class="btn btn-sm" href="attendance.html?batch_id=${b.id}">Start Attendance</a>
+            </div>
+          </div>
+        `).join("");
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

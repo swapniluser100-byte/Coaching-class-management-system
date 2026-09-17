@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Settings · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("settings.html", `
+      <div id="alertBox"></div>
+      <div class="card">
+        <h2>API Connection</h2>
+        <p>The Worker API this portal talks to. Stored locally in this browser only.</p>
+        <label>API Base URL</label>
+        <input id="apiBaseUrl" />
+        <button class="btn mt-16" id="saveApiBtn">Save</button>
+      </div>
+      <div class="card">
+        <h2>About Tutor Marks Permission</h2>
+        <p>Toggle whether a tutor may upload exam marks from the <a href="tutors.html">Manage Tutors</a> page (per-tutor "Allowed to upload marks" checkbox).</p>
+      </div>
+      <div class="card">
+        <h2>Session</h2>
+        <p>Signed in as an administrator. Logging out clears this browser's session token only.</p>
+        <button class="btn btn-danger" id="logoutBtn2">Log out</button>
+      </div>
+    `);
+    setPageTitle("Settings");
+
+    const input = document.getElementById("apiBaseUrl");
+    input.value = localStorage.getItem("tms_api_base_url") || window.API_BASE_URL;
+
+    document.getElementById("saveApiBtn").addEventListener("click", () => {
+      localStorage.setItem("tms_api_base_url", input.value.trim());
+      showAlert(document.getElementById("alertBox"), "Saved. Reload the page for it to take effect everywhere.", "success");
+    });
+
+    document.getElementById("logoutBtn2").addEventListener("click", () => {
+      Api.clearToken("admin");
+      window.location.href = "index.html";
+    });
+  </script>
+</body>
+</html>

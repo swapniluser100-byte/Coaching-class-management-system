@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Exam Marks · Student</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireStudentAuth();
+    renderStudentShell("exam.html", `
+      <h1>View Exam Marks</h1>
+      <div id="alertBox"></div>
+      <div class="card">
+        <label>Exam Code</label>
+        <form id="examForm">
+          <div class="flex gap-8">
+            <input id="examCode" placeholder="e.g. K7M2QWXT9" style="text-transform:uppercase;" required />
+            <button class="btn" type="submit">View</button>
+          </div>
+        </form>
+      </div>
+      <div class="card hidden" id="resultCard"></div>
+    `);
+
+    document.getElementById("examForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const alertBox = document.getElementById("alertBox");
+      const resultCard = document.getElementById("resultCard");
+      alertBox.innerHTML = "";
+      resultCard.classList.add("hidden");
+      try {
+        const data = await Api.request("student", "/student/exam/view", {
+          method: "POST",
+          body: { exam_code: document.getElementById("examCode").value.trim() },
+        });
+        resultCard.classList.remove("hidden");
+        resultCard.innerHTML = `
+          <h2>${escapeHtml(data.exam.exam_name)}</h2>
+          <p class="text-muted">${data.exam.exam_date} · Total marks: ${data.exam.total_marks}</p>
+          <div class="grid grid-2 mt-16">
+            <div class="stat-tile card">
+              <div class="value">${data.marks_obtained ?? "—"}</div>
+              <div class="label">Your Marks</div>
+            </div>
+            <div class="stat-tile card">
+              <div class="value">${data.rank ?? "—"}</div>
+              <div class="label">Rank ${data.total_students ? `(of ${data.total_students})` : ""}</div>
+            </div>
+            <div class="stat-tile card">
+              <div class="value">${data.batch_average ?? "—"}</div>
+              <div class="label">Batch Average</div>
+            </div>
+            <div class="stat-tile card">
+              <div class="value">${data.topper_marks ?? "—"}</div>
+              <div class="label">Topper's Marks</div>
+            </div>
+          </div>
+          ${data.remarks ? `<p class="mt-16"><strong>Remarks:</strong> ${escapeHtml(data.remarks)}</p>` : ""}
+          ${data.marks_obtained == null ? `<div class="alert alert-info mt-16">Marks for this exam haven't been uploaded yet.</div>` : ""}
+        `;
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
+  </script>
+</body>
+</html>

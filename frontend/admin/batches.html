@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manage Batches · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("batches.html", `
+      <div id="alertBox"></div>
+      <div class="grid" style="grid-template-columns: 360px 1fr;">
+        <div class="card">
+          <h2 id="formTitle">Add Batch</h2>
+          <form id="batchForm">
+            <input type="hidden" id="batchId" />
+            <label>Batch Name</label>
+            <input id="name" required placeholder="e.g. 12th Physics - Evening" />
+            <div class="field-row">
+              <div>
+                <label>Subject</label>
+                <input id="subject" />
+              </div>
+              <div>
+                <label>Class Level</label>
+                <select id="classLevel">
+                  <option value="11th">11th</option>
+                  <option value="12th">12th</option>
+                  <option value="CET">CET</option>
+                </select>
+              </div>
+            </div>
+            <label>Tutor</label>
+            <select id="tutorId"><option value="">— unassigned —</option></select>
+            <div class="field-row">
+              <div>
+                <label>Schedule Days</label>
+                <input id="scheduleDays" placeholder="Mon,Wed,Fri" />
+              </div>
+              <div>
+                <label>Schedule Time</label>
+                <input id="scheduleTime" placeholder="17:00-18:30" />
+              </div>
+            </div>
+            <h3 class="mt-16">Classroom Geo-fence</h3>
+            <p style="font-size:12px;">Used to verify students are physically present (within radius) when marking attendance.</p>
+            <div class="field-row">
+              <div>
+                <label>Latitude</label>
+                <input id="lat" type="number" step="any" />
+              </div>
+              <div>
+                <label>Longitude</label>
+                <input id="lng" type="number" step="any" />
+              </div>
+            </div>
+            <label>Radius (meters)</label>
+            <input id="radius" type="number" value="100" />
+            <button type="button" class="btn btn-secondary btn-block mt-8" id="useMyLocationBtn">📍 Use my current location</button>
+            <div class="flex gap-8 mt-16">
+              <button class="btn" type="submit">Save</button>
+              <button class="btn btn-secondary" type="button" id="resetBtn">Clear</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Batches</h2>
+          <div class="table-wrap mt-16">
+            <table>
+              <thead><tr><th>Name</th><th>Class</th><th>Tutor</th><th>Strength</th><th>Geo-fence</th><th>Status</th><th></th></tr></thead>
+              <tbody id="batchesBody"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `);
+    setPageTitle("Manage Batches");
+
+    let allBatches = [];
+    let allTutors = [];
+
+    async function loadTutors() {
+      allTutors = await Api.request("admin", "/admin/tutors");
+      document.getElementById("tutorId").innerHTML = `<option value="">— unassigned —</option>` +
+        allTutors.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("");
+    }
+
+    async function loadBatches() {
+      allBatches = await Api.request("admin", "/admin/batches");
+      const tbody = document.getElementById("batchesBody");
+      if (allBatches.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-muted">No batches yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = allBatches.map((b) => `
+        <tr>
+          <td>${escapeHtml(b.name)}</td>
+          <td>${escapeHtml(b.class_level)}</td>
+          <td>${escapeHtml(b.tutor_name || "—")}</td>
+          <td>${b.strength}</td>
+          <td>${b.classroom_lat != null ? `<span class="badge badge-success">Set (${b.geo_radius_m}m)</span>` : `<span class="badge badge-muted">Not set</span>`}</td>
+          <td>${b.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="editBatch('${b.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteBatch('${b.id}')">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      document.getElementById("batchForm").reset();
+      document.getElementById("batchId").value = "";
+      document.getElementById("formTitle").textContent = "Add Batch";
+    });
+
+    document.getElementById("useMyLocationBtn").addEventListener("click", () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById("lat").value = pos.coords.latitude;
+          document.getElementById("lng").value = pos.coords.longitude;
+        },
+        (err) => alert("Could not get location: " + err.message)
+      );
+    });
+
+    window.editBatch = (id) => {
+      const b = allBatches.find((x) => x.id === id);
+      if (!b) return;
+      document.getElementById("batchId").value = b.id;
+      document.getElementById("name").value = b.name;
+      document.getElementById("subject").value = b.subject || "";
+      document.getElementById("classLevel").value = b.class_level;
+      document.getElementById("tutorId").value = b.tutor_id || "";
+      document.getElementById("scheduleDays").value = b.schedule_days || "";
+      document.getElementById("scheduleTime").value = b.schedule_time || "";
+      document.getElementById("lat").value = b.classroom_lat ?? "";
+      document.getElementById("lng").value = b.classroom_long ?? "";
+      document.getElementById("radius").value = b.geo_radius_m ?? 100;
+      document.getElementById("formTitle").textContent = "Edit Batch";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.deleteBatch = async (id) => {
+      if (!confirm("Delete this batch? This removes all its attendance history.")) return;
+      await Api.request("admin", "/admin/batch/delete", { method: "POST", body: { id } });
+      await loadBatches();
+    };
+
+    document.getElementById("batchForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("batchId").value;
+      const payload = {
+        name: document.getElementById("name").value.trim(),
+        subject: document.getElementById("subject").value.trim() || undefined,
+        class_level: document.getElementById("classLevel").value,
+        tutor_id: document.getElementById("tutorId").value || undefined,
+        schedule_days: document.getElementById("scheduleDays").value.trim() || undefined,
+        schedule_time: document.getElementById("scheduleTime").value.trim() || undefined,
+        classroom_lat: document.getElementById("lat").value ? parseFloat(document.getElementById("lat").value) : undefined,
+        classroom_long: document.getElementById("lng").value ? parseFloat(document.getElementById("lng").value) : undefined,
+        geo_radius_m: document.getElementById("radius").value ? parseInt(document.getElementById("radius").value, 10) : undefined,
+      };
+      try {
+        if (id) {
+          await Api.request("admin", "/admin/batch/update", { method: "POST", body: { id, ...payload } });
+        } else {
+          await Api.request("admin", "/admin/batch/create", { method: "POST", body: payload });
+        }
+        document.getElementById("batchForm").reset();
+        document.getElementById("batchId").value = "";
+        document.getElementById("formTitle").textContent = "Add Batch";
+        await loadBatches();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    (async () => {
+      try {
+        await loadTutors();
+        await loadBatches();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

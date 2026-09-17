@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("dashboard.html", `
+      <div id="alertBox"></div>
+      <div class="grid grid-4" id="statTiles">
+        <div class="card stat-tile"><div class="value" id="tileBatches">–</div><div class="label">Total Batches</div></div>
+        <div class="card stat-tile"><div class="value" id="tileStudents">–</div><div class="label">Total Students</div></div>
+        <div class="card stat-tile"><div class="value" id="tileTutors">–</div><div class="label">Total Tutors</div></div>
+        <div class="card stat-tile"><div class="value" id="tileAvgAttendance">–</div><div class="label">Avg Attendance %</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Attendance % by Batch</h2>
+          <canvas id="attendanceChart" height="220"></canvas>
+        </div>
+        <div class="card">
+          <h2>Batch Strength</h2>
+          <canvas id="strengthChart" height="220"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Top Absentees</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Student</th><th>Batch</th><th>Sessions Held</th><th>Present</th><th>Attendance %</th></tr></thead>
+            <tbody id="absenteesBody"><tr><td colspan="5" class="text-muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+    setPageTitle("Dashboard");
+
+    (async () => {
+      const alertBox = document.getElementById("alertBox");
+      try {
+        const [students, batches, tutors, overview] = await Promise.all([
+          Api.request("admin", "/admin/students"),
+          Api.request("admin", "/admin/batches"),
+          Api.request("admin", "/admin/tutors"),
+          Api.request("admin", "/admin/analytics/overview"),
+        ]);
+
+        document.getElementById("tileBatches").textContent = batches.length;
+        document.getElementById("tileStudents").textContent = students.length;
+        document.getElementById("tileTutors").textContent = tutors.length;
+
+        const pctValues = overview.attendancePct.map((r) => r.attendance_pct).filter((v) => v != null);
+        const avg = pctValues.length ? (pctValues.reduce((a, b) => a + b, 0) / pctValues.length).toFixed(1) : "–";
+        document.getElementById("tileAvgAttendance").textContent = avg === "–" ? avg : `${avg}%`;
+
+        new Chart(document.getElementById("attendanceChart"), {
+          type: "bar",
+          data: {
+            labels: overview.attendancePct.map((r) => r.batch_name),
+            datasets: [{ label: "Attendance %", data: overview.attendancePct.map((r) => r.attendance_pct || 0), backgroundColor: "#3654e0" }],
+          },
+          options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+        });
+
+        new Chart(document.getElementById("strengthChart"), {
+          type: "doughnut",
+          data: {
+            labels: overview.batchStrength.map((r) => r.batch_name),
+            datasets: [{ data: overview.batchStrength.map((r) => r.strength), backgroundColor: ["#3654e0","#17a06a","#b7791f","#d6412f","#7c3aed","#0ea5e9"] }],
+          },
+        });
+
+        const tbody = document.getElementById("absenteesBody");
+        if (overview.topAbsentees.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="text-muted">No attendance data yet.</td></tr>`;
+        } else {
+          tbody.innerHTML = overview.topAbsentees.map((a) => {
+            const pct = a.sessions_held ? ((a.present_count / a.sessions_held) * 100).toFixed(0) : "0";
+            return `<tr>
+              <td>${escapeHtml(a.student_name)}</td>
+              <td>${escapeHtml(a.batch_name)}</td>
+              <td>${a.sessions_held}</td>
+              <td>${a.present_count}</td>
+              <td><span class="badge ${pct < 60 ? "badge-danger" : pct < 80 ? "badge-warning" : "badge-success"}">${pct}%</span></td>
+            </tr>`;
+          }).join("");
+        }
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

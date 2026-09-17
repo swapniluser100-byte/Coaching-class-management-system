@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Student Login · Tuition Management</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card card">
+      <div class="auth-logo">🎓 Student Login</div>
+      <div id="alertBox"></div>
+
+      <form id="phoneForm">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" required placeholder="9876543210" autocomplete="username" />
+        <button class="btn btn-block mt-16" type="submit" id="sendOtpBtn">Send OTP</button>
+      </form>
+
+      <form id="otpForm" class="hidden">
+        <p class="text-muted" id="otpHint"></p>
+        <label for="otp">Enter OTP</label>
+        <input type="text" id="otp" required maxlength="6" inputmode="numeric" />
+        <button class="btn btn-block mt-16" type="submit" id="verifyBtn">Verify & Log In</button>
+        <button type="button" class="btn btn-secondary btn-block mt-8" id="backBtn">Use a different number</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/fingerprint.js"></script>
+  <script>
+    const alertBox = document.getElementById("alertBox");
+    let currentPhone = "";
+
+    document.getElementById("phoneForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("sendOtpBtn");
+      btn.disabled = true;
+      alertBox.innerHTML = "";
+      currentPhone = document.getElementById("phone").value.trim();
+      try {
+        const data = await Api.request(null, "/student/otp/request", { method: "POST", body: { phone: currentPhone } });
+        document.getElementById("phoneForm").classList.add("hidden");
+        document.getElementById("otpForm").classList.remove("hidden");
+        document.getElementById("otpHint").textContent = data.mock_otp
+          ? `Dev mode — your OTP is ${data.mock_otp}`
+          : `OTP sent to ${currentPhone}`;
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("backBtn").addEventListener("click", () => {
+      document.getElementById("otpForm").classList.add("hidden");
+      document.getElementById("phoneForm").classList.remove("hidden");
+      alertBox.innerHTML = "";
+    });
+
+    document.getElementById("otpForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("verifyBtn");
+      btn.disabled = true;
+      alertBox.innerHTML = "";
+      try {
+        const deviceFingerprint = await getDeviceFingerprint();
+        const data = await Api.request(null, "/student/login", {
+          method: "POST",
+          body: { phone: currentPhone, otp: document.getElementById("otp").value.trim(), device_fingerprint: deviceFingerprint },
+        });
+        Api.setToken("student", data.token);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

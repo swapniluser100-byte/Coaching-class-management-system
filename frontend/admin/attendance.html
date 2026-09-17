@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Attendance Reports · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("attendance.html", `
+      <div id="alertBox"></div>
+      <div class="card">
+        <div class="flex gap-12" style="flex-wrap:wrap;">
+          <div style="min-width:200px;">
+            <label>Batch</label>
+            <select id="filterBatch"><option value="">All batches</option></select>
+          </div>
+          <div>
+            <label>From</label>
+            <input type="date" id="filterFrom" />
+          </div>
+          <div>
+            <label>To</label>
+            <input type="date" id="filterTo" />
+          </div>
+          <div style="align-self:flex-end;">
+            <button class="btn" id="applyFilterBtn">Apply</button>
+          </div>
+          <div style="align-self:flex-end; margin-left:auto;">
+            <button class="btn btn-secondary" id="exportBtn">⬇ Export CSV</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Batch</th><th>Student</th><th>Status</th><th>Marked At</th><th>Distance (m)</th></tr></thead>
+            <tbody id="reportBody"><tr><td colspan="6" class="text-muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+    setPageTitle("Attendance Reports");
+
+    async function loadBatchOptions() {
+      const batches = await Api.request("admin", "/admin/batches");
+      document.getElementById("filterBatch").innerHTML = `<option value="">All batches</option>` +
+        batches.map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("");
+    }
+
+    function buildQuery() {
+      const params = new URLSearchParams();
+      const batch = document.getElementById("filterBatch").value;
+      const from = document.getElementById("filterFrom").value;
+      const to = document.getElementById("filterTo").value;
+      if (batch) params.set("batch_id", batch);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      return params.toString();
+    }
+
+    async function loadReport() {
+      const qs = buildQuery();
+      const rows = await Api.request("admin", `/admin/attendance/report${qs ? "?" + qs : ""}`);
+      const tbody = document.getElementById("reportBody");
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-muted">No records found.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map((r) => `
+        <tr>
+          <td>${r.date}</td>
+          <td>${escapeHtml(r.batch_name)}</td>
+          <td>${escapeHtml(r.student_name)}</td>
+          <td>${r.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-danger">Absent</span>`}</td>
+          <td>${r.timestamp || "-"}</td>
+          <td>${r.distance_m != null ? Math.round(r.distance_m) : "-"}</td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("applyFilterBtn").addEventListener("click", () => {
+      loadReport().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", async () => {
+      const qs = buildQuery();
+      const res = await Api.request("admin", `/admin/attendance/export.csv${qs ? "?" + qs : ""}`, { raw: true });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "attendance_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    (async () => {
+      try {
+        await loadBatchOptions();
+        await loadReport();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

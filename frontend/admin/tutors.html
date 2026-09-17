@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manage Tutors · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("tutors.html", `
+      <div id="alertBox"></div>
+      <div class="grid" style="grid-template-columns: 340px 1fr;">
+        <div class="card">
+          <h2 id="formTitle">Add Tutor</h2>
+          <form id="tutorForm">
+            <input type="hidden" id="tutorId" />
+            <label>Name</label>
+            <input id="name" required />
+            <label>Phone</label>
+            <input id="phone" required placeholder="9876543210" />
+            <label>Password <span id="passwordHint" class="text-muted"></span></label>
+            <input id="password" type="password" placeholder="min 8 characters" />
+            <label class="flex gap-8" style="align-items:center;">
+              <input type="checkbox" id="canUploadMarks" checked style="width:auto;" /> Allowed to upload marks
+            </label>
+            <div class="flex gap-8 mt-16">
+              <button class="btn" type="submit">Save</button>
+              <button class="btn btn-secondary" type="button" id="resetBtn">Clear</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Tutors</h2>
+          <div class="table-wrap mt-16">
+            <table>
+              <thead><tr><th>Name</th><th>Phone</th><th>Can Upload Marks</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tutorsBody"><tr><td colspan="5" class="text-muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `);
+    setPageTitle("Manage Tutors");
+
+    let allTutors = [];
+
+    async function loadTutors() {
+      allTutors = await Api.request("admin", "/admin/tutors");
+      const tbody = document.getElementById("tutorsBody");
+      if (allTutors.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-muted">No tutors yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = allTutors.map((t) => `
+        <tr>
+          <td>${escapeHtml(t.name)}</td>
+          <td>${escapeHtml(t.phone)}</td>
+          <td>${t.can_upload_marks ? `<span class="badge badge-success">Yes</span>` : `<span class="badge badge-muted">No</span>`}</td>
+          <td>${t.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="editTutor('${t.id}')">Edit</button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleActive('${t.id}', ${t.active ? 0 : 1})">${t.active ? "Deactivate" : "Activate"}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTutor('${t.id}')">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      document.getElementById("tutorForm").reset();
+      document.getElementById("tutorId").value = "";
+      document.getElementById("passwordHint").textContent = "";
+      document.getElementById("formTitle").textContent = "Add Tutor";
+    });
+
+    window.editTutor = (id) => {
+      const t = allTutors.find((x) => x.id === id);
+      if (!t) return;
+      document.getElementById("tutorId").value = t.id;
+      document.getElementById("name").value = t.name;
+      document.getElementById("phone").value = t.phone;
+      document.getElementById("canUploadMarks").checked = !!t.can_upload_marks;
+      document.getElementById("passwordHint").textContent = "(leave blank to keep unchanged)";
+      document.getElementById("formTitle").textContent = "Edit Tutor";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.toggleActive = async (id, active) => {
+      await Api.request("admin", "/admin/tutor/update", { method: "POST", body: { id, active: !!active } });
+      await loadTutors();
+    };
+
+    window.deleteTutor = async (id) => {
+      if (!confirm("Delete this tutor?")) return;
+      await Api.request("admin", "/admin/tutor/delete", { method: "POST", body: { id } });
+      await loadTutors();
+    };
+
+    document.getElementById("tutorForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("tutorId").value;
+      const password = document.getElementById("password").value;
+      const payload = {
+        name: document.getElementById("name").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        can_upload_marks: document.getElementById("canUploadMarks").checked,
+      };
+      try {
+        if (id) {
+          await Api.request("admin", "/admin/tutor/update", { method: "POST", body: { id, ...payload, password: password || undefined } });
+        } else {
+          if (!password || password.length < 8) throw new Error("Password (min 8 chars) is required for a new tutor");
+          await Api.request("admin", "/admin/tutor/create", { method: "POST", body: { ...payload, password } });
+        }
+        document.getElementById("tutorForm").reset();
+        document.getElementById("tutorId").value = "";
+        document.getElementById("formTitle").textContent = "Add Tutor";
+        await loadTutors();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    loadTutors().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+  </script>
+</body>
+</html>

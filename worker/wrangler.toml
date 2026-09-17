@@ -1,0 +1,45 @@
+name = "tuition-management-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# D1 Database
+# Create with: wrangler d1 create tuition-db
+# Then paste the returned database_id below.
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "tuition-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# ---------------------------------------------------------------------------
+# R2 Bucket for student photos
+# Create with: wrangler r2 bucket create tuition-student-photos
+# ---------------------------------------------------------------------------
+[[r2_buckets]]
+binding = "PHOTOS_BUCKET"
+bucket_name = "tuition-student-photos"
+
+# ---------------------------------------------------------------------------
+# KV Namespace used for lightweight rate limiting & OTP storage
+# Create with: wrangler kv namespace create RATE_LIMIT_KV
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# ---------------------------------------------------------------------------
+# Secrets (set with `wrangler secret put <NAME>`, do NOT hardcode here):
+#   JWT_SECRET          - HMAC secret used to sign all JWTs
+#   QR_HMAC_SECRET       - server-side pepper mixed into per-session QR secrets
+#   ADMIN_BOOTSTRAP_KEY  - one-time key allowing creation of the first admin
+# ---------------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "production"
+ATTENDANCE_WINDOW_MINUTES = "15"
+QR_ROTATE_SECONDS = "10"
+GEO_RADIUS_METERS = "100"
+
+[observability]
+enabled = true

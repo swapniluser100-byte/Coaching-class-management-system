@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Analytics · Teacher</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script>
+    requireTeacherAuth();
+    renderTeacherShell("analytics.html", `
+      <h1>Batch Analytics</h1>
+      <div id="alertBox"></div>
+      <div class="card">
+        <label>Batch</label>
+        <select id="batchSelect"></select>
+      </div>
+      <div class="card">
+        <h2>Daily Attendance (last 60 sessions)</h2>
+        <canvas id="dailyChart" height="220"></canvas>
+      </div>
+      <div class="card">
+        <h2>Attendance Heatmap</h2>
+        <div id="heatmap" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+        <p class="text-muted mt-8" style="font-size:12px;">Each cell is one session day; darker green = higher attendance that day.</p>
+      </div>
+      <div class="card">
+        <h2>Student-wise Attendance History</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Student</th><th>Present</th><th>Total Sessions</th><th>Attendance %</th></tr></thead>
+            <tbody id="studentBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+
+    let dailyChartInstance = null;
+
+    function greenFor(pct) {
+      if (pct >= 90) return "#0b6b3a";
+      if (pct >= 75) return "#17a06a";
+      if (pct >= 50) return "#8fd6ae";
+      if (pct > 0) return "#d9f2e3";
+      return "#eef1f6";
+    }
+
+    async function loadAnalytics(batchId) {
+      const { dailySummary, studentHistory } = await Api.request("tutor", `/tutor/analytics/${batchId}`);
+
+      const sorted = [...dailySummary].reverse();
+      if (dailyChartInstance) dailyChartInstance.destroy();
+      dailyChartInstance = new Chart(document.getElementById("dailyChart"), {
+        type: "line",
+        data: {
+          labels: sorted.map((d) => d.date),
+          datasets: [
+            { label: "Present", data: sorted.map((d) => d.present), borderColor: "#17a06a", backgroundColor: "#17a06a", tension: 0.3 },
+            { label: "Absent", data: sorted.map((d) => d.absent), borderColor: "#d6412f", backgroundColor: "#d6412f", tension: 0.3 },
+          ],
+        },
+        options: { scales: { y: { beginAtZero: true } } },
+      });
+
+      const heatmap = document.getElementById("heatmap");
+      heatmap.innerHTML = sorted.map((d) => {
+        const total = d.present + d.absent;
+        const pct = total ? Math.round((d.present / total) * 100) : 0;
+        return `<div title="${d.date}: ${pct}% present" style="width:28px;height:28px;border-radius:6px;background:${greenFor(pct)};"></div>`;
+      }).join("");
+
+      document.getElementById("studentBody").innerHTML = studentHistory.map((s) => {
+        const pct = s.total_sessions ? Math.round((s.present_count / s.total_sessions) * 100) : 0;
+        return `<tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.present_count}</td>
+          <td>${s.total_sessions}</td>
+          <td><span class="badge ${pct < 60 ? "badge-danger" : pct < 80 ? "badge-warning" : "badge-success"}">${pct}%</span></td>
+        </tr>`;
+      }).join("");
+    }
+
+    (async () => {
+      try {
+        const batches = await Api.request("tutor", "/tutor/batches");
+        const select = document.getElementById("batchSelect");
+        select.innerHTML = batches.map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("");
+        select.addEventListener("change", () => loadAnalytics(select.value).catch((err) => showAlert(document.getElementById("alertBox"), err.message)));
+        if (batches.length) await loadAnalytics(batches[0].id);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

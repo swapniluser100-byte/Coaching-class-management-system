@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scan QR · Student</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+<style>
+  #videoWrap { position: relative; width: 100%; max-width: 360px; margin: 0 auto; border-radius: 12px; overflow: hidden; background: #000; }
+  #video { width: 100%; display: block; }
+  #scanBox {
+    position: absolute; inset: 15%; border: 3px solid #fff; border-radius: 12px;
+    box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
+  }
+</style>
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/fingerprint.js"></script>
+  <script src="js/common.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    requireStudentAuth();
+    renderStudentShell("scan.html", `
+      <h1>Scan Attendance QR</h1>
+      <div id="alertBox"></div>
+      <div id="scannerCard" class="card">
+        <div id="videoWrap">
+          <video id="video" playsinline muted></video>
+          <div id="scanBox"></div>
+        </div>
+        <canvas id="canvas" class="hidden"></canvas>
+        <p class="text-center text-muted mt-16" id="statusText">Point your camera at the QR code shown by your tutor.</p>
+      </div>
+      <div id="resultCard" class="card hidden text-center">
+        <div id="resultIcon" style="font-size:42px;"></div>
+        <h2 id="resultTitle"></h2>
+        <p id="resultMessage" class="text-muted"></p>
+        <button class="btn btn-secondary mt-16" id="scanAgainBtn">Scan Again</button>
+      </div>
+    `);
+
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const statusText = document.getElementById("statusText");
+
+    let stream = null;
+    let scanning = false;
+    let rafId = null;
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+        await video.play();
+        scanning = true;
+        rafId = requestAnimationFrame(tick);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), "Camera access is required to scan: " + err.message);
+      }
+    }
+
+    function stopCamera() {
+      scanning = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+    }
+
+    function tick() {
+      if (!scanning) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data) {
+          onQrDecoded(code.data);
+          return;
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    async function onQrDecoded(raw) {
+      scanning = false;
+      let payload;
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        statusText.textContent = "That QR code isn't recognized. Point at the attendance QR.";
+        scanning = true;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      stopCamera();
+      statusText.textContent = "Getting your location…";
+      await markAttendance(payload);
+    }
+
+    function getLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error("Geolocation is not supported on this device"));
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos.coords),
+          (err) => reject(new Error("Location permission is required to mark attendance: " + err.message)),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      });
+    }
+
+    async function markAttendance(payload) {
+      try {
+        const coords = await getLocation();
+        const deviceFingerprint = await getDeviceFingerprint();
+
+        const data = await Api.request("student", "/attendance/mark", {
+          method: "POST",
+          body: {
+            session_id: payload.session_id,
+            batch_id: payload.batch_id,
+            token: payload.token,
+            geo_lat: coords.latitude,
+            geo_long: coords.longitude,
+            device_fingerprint: deviceFingerprint,
+          },
+        });
+        showResult(true, "Attendance Marked!", `Marked present for ${data.date}.`);
+      } catch (err) {
+        showResult(false, "Could Not Mark Attendance", err.message);
+      }
+    }
+
+    function showResult(success, title, message) {
+      document.getElementById("scannerCard").classList.add("hidden");
+      document.getElementById("resultCard").classList.remove("hidden");
+      document.getElementById("resultIcon").textContent = success ? "✅" : "⚠️";
+      document.getElementById("resultTitle").textContent = title;
+      document.getElementById("resultMessage").textContent = message;
+    }
+
+    document.getElementById("scanAgainBtn").addEventListener("click", () => {
+      document.getElementById("resultCard").classList.add("hidden");
+      document.getElementById("scannerCard").classList.remove("hidden");
+      statusText.textContent = "Point your camera at the QR code shown by your tutor.";
+      startCamera();
+    });
+
+    startCamera();
+    window.addEventListener("beforeunload", stopCamera);
+  </script>
+</body>
+</html>

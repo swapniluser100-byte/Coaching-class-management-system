@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Exams & Marks · Teacher</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireTeacherAuth();
+    renderTeacherShell("exams.html", `
+      <h1>Exams & Marks</h1>
+      <div id="alertBox"></div>
+      <div class="card">
+        <label>Exam</label>
+        <select id="examSelect"></select>
+      </div>
+      <div class="card hidden" id="marksCard">
+        <div class="flex-between">
+          <h2 class="mb-0" id="examHeading"></h2>
+          <button class="btn" id="saveBtn">Save Marks</button>
+        </div>
+        <div class="table-wrap mt-16">
+          <table>
+            <thead><tr><th>Student</th><th>Marks</th><th>Remarks</th></tr></thead>
+            <tbody id="marksBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+
+    let exams = [];
+    let currentExam = null;
+
+    async function loadExams() {
+      exams = await Api.request("tutor", "/tutor/exams");
+      document.getElementById("examSelect").innerHTML =
+        `<option value="">— select an exam —</option>` +
+        exams.map((e) => `<option value="${e.id}">${escapeHtml(e.exam_name)} (${e.exam_code})</option>`).join("");
+    }
+
+    async function loadMarks(examId) {
+      currentExam = exams.find((e) => e.id === examId);
+      if (!currentExam) return;
+      document.getElementById("marksCard").classList.remove("hidden");
+      document.getElementById("examHeading").textContent = `${currentExam.exam_name} — Total: ${currentExam.total_marks}`;
+
+      const { students } = await Api.request("tutor", `/attendance/batch/${currentExam.batch_id}`);
+
+      const tbody = document.getElementById("marksBody");
+      tbody.innerHTML = students.map((s) => `
+        <tr data-student="${s.student_id}">
+          <td>${escapeHtml(s.name)}</td>
+          <td><input type="number" class="marksInput" min="0" max="${currentExam.total_marks}" /></td>
+          <td><input type="text" class="remarksInput" /></td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("examSelect").addEventListener("change", (e) => {
+      if (e.target.value) loadMarks(e.target.value).catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+      else document.getElementById("marksCard").classList.add("hidden");
+    });
+
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      const rows = [...document.querySelectorAll("#marksBody tr")];
+      const marks = rows.map((row) => {
+        const val = row.querySelector(".marksInput").value;
+        if (val === "") return null;
+        return {
+          student_id: row.dataset.student,
+          marks_obtained: parseInt(val, 10),
+          remarks: row.querySelector(".remarksInput").value.trim() || undefined,
+        };
+      }).filter(Boolean);
+
+      try {
+        await Api.request("tutor", "/tutor/exam/upload-marks", { method: "POST", body: { exam_id: currentExam.id, marks } });
+        showAlert(document.getElementById("alertBox"), `Saved marks for ${marks.length} students.`, "success");
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    loadExams().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+  </script>
+</body>
+</html>

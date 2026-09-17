@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Admin Login · Tuition Management</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card card">
+      <div class="auth-logo">📚 Tuition Admin</div>
+      <div id="alertBox"></div>
+      <form id="loginForm">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="username" />
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password" />
+        <button class="btn btn-block mt-16" type="submit" id="loginBtn">Log in</button>
+      </form>
+      <p class="text-center mt-16" style="font-size:13px;">
+        First time setup? <a href="#" id="bootstrapLink">Create the first admin account</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script>
+    const alertBox = document.getElementById("alertBox");
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("loginBtn");
+      btn.disabled = true;
+      alertBox.innerHTML = "";
+      try {
+        const data = await Api.request("admin", "/admin/login", {
+          method: "POST",
+          body: {
+            email: document.getElementById("email").value.trim(),
+            password: document.getElementById("password").value,
+          },
+        });
+        Api.setToken("admin", data.token);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("bootstrapLink").addEventListener("click", async (e) => {
+      e.preventDefault();
+      const email = prompt("Admin email:");
+      if (!email) return;
+      const password = prompt("Admin password (min 8 chars):");
+      if (!password) return;
+      const bootstrapKey = prompt("Bootstrap key (ADMIN_BOOTSTRAP_KEY secret set on the Worker):");
+      if (!bootstrapKey) return;
+      try {
+        await Api.request(null, "/admin/bootstrap", {
+          method: "POST",
+          body: { email, password, bootstrap_key: bootstrapKey },
+        });
+        alertBox.innerHTML = `<div class="alert alert-success">Admin created. You can log in now.</div>`;
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Home · Student</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireStudentAuth();
+    renderStudentShell("dashboard.html", `
+      <div id="alertBox"></div>
+      <div class="card text-center">
+        <img id="avatarImg" class="avatar" style="width:84px;height:84px;margin:0 auto 12px;display:block;" />
+        <h2 id="studentName" class="mb-0"></h2>
+        <p id="studentPhone"></p>
+        <input type="file" id="photoInput" accept="image/*" class="hidden" />
+        <button class="btn btn-secondary btn-sm" id="changePhotoBtn">Update Photo</button>
+      </div>
+      <div class="card">
+        <h2>My Batches</h2>
+        <div id="scheduleList"><p class="text-muted">Loading…</p></div>
+      </div>
+      <a class="btn btn-block" href="scan.html">📷 Scan QR to Mark Attendance</a>
+    `);
+
+    async function loadProfile() {
+      const profile = await Api.request("student", "/student/profile");
+      document.getElementById("studentName").textContent = profile.name;
+      document.getElementById("studentPhone").textContent = profile.phone;
+      document.getElementById("avatarImg").src = profile.photo_url
+        ? `${window.API_BASE_URL}/photos/${profile.photo_url}?t=${Date.now()}`
+        : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84'%3E%3Crect width='84' height='84' fill='%23e2e6ef'/%3E%3C/svg%3E";
+      // Bearer-protected photo URLs can't be set directly on <img src>; fetch as blob instead.
+      if (profile.photo_url) {
+        try {
+          const res = await Api.request("student", `/photos/${profile.photo_url}`, { raw: true });
+          const blob = await res.blob();
+          document.getElementById("avatarImg").src = URL.createObjectURL(blob);
+        } catch {}
+      }
+    }
+
+    async function loadSchedule() {
+      const schedule = await Api.request("student", "/student/schedule");
+      const el = document.getElementById("scheduleList");
+      if (schedule.length === 0) {
+        el.innerHTML = `<p class="text-muted">You are not yet assigned to any batch.</p>`;
+        return;
+      }
+      el.innerHTML = schedule.map((b) => `
+        <div class="flex-between" style="padding:10px 0; border-bottom:1px solid var(--color-border);">
+          <div>
+            <strong>${escapeHtml(b.name)}</strong><br/>
+            <span class="text-muted" style="font-size:13px;">${escapeHtml(b.subject || "")} · ${escapeHtml(b.class_level || "")}</span>
+          </div>
+          <div class="text-muted" style="font-size:13px; text-align:right;">
+            ${escapeHtml(b.schedule_days || "")}<br/>${escapeHtml(b.schedule_time || "")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    document.getElementById("changePhotoBtn").addEventListener("click", () => {
+      document.getElementById("photoInput").click();
+    });
+
+    document.getElementById("photoInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        await Api.request("student", "/student/photo", { method: "POST", body: file, isForm: true });
+        await loadProfile();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    (async () => {
+      try {
+        await Promise.all([loadProfile(), loadSchedule()]);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

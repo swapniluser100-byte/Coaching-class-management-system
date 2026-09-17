@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Teacher Login · Tuition Management</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card card">
+      <div class="auth-logo">🧑‍🏫 Teacher Login</div>
+      <div id="alertBox"></div>
+      <form id="loginForm">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" required placeholder="9876543210" autocomplete="username" />
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password" />
+        <button class="btn btn-block mt-16" type="submit" id="loginBtn">Log in</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("loginBtn");
+      const alertBox = document.getElementById("alertBox");
+      btn.disabled = true;
+      alertBox.innerHTML = "";
+      try {
+        const data = await Api.request("tutor", "/tutor/login", {
+          method: "POST",
+          body: {
+            phone: document.getElementById("phone").value.trim(),
+            password: document.getElementById("password").value,
+          },
+        });
+        Api.setToken("tutor", data.token);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

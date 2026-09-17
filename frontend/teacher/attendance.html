@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Attendance / QR · Teacher</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    requireTeacherAuth();
+    renderTeacherShell("attendance.html", `
+      <h1>Attendance</h1>
+      <div id="alertBox"></div>
+
+      <div class="card">
+        <label>Batch</label>
+        <select id="batchSelect"></select>
+        <div id="sessionControls" class="mt-16">
+          <button class="btn" id="startBtn">Start Attendance Session</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="qrCard">
+        <div class="qr-frame">
+          <div id="qrCanvas"></div>
+          <div class="qr-timer" id="qrTimer">rotates in 10s</div>
+          <p class="text-muted" style="font-size:13px;">Students scan this from the student portal's "Scan QR" page. Ends automatically at <strong id="sessionEndsAt"></strong>.</p>
+          <button class="btn btn-danger" id="stopBtn">End Session</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="liveCard">
+        <div class="flex-between">
+          <h2 class="mb-0">Live Attendance</h2>
+          <span class="badge badge-success" id="presentCount">0 present</span>
+        </div>
+        <div class="table-wrap mt-16">
+          <table>
+            <thead><tr><th>Student</th><th>Status</th><th>Marked At</th></tr></thead>
+            <tbody id="liveBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+
+    const params = new URLSearchParams(location.search);
+    const preselectBatchId = params.get("batch_id");
+
+    let currentSession = null; // { session_id, batch_id, ends_at }
+    let qrRotateTimeout = null;
+    let liveInterval = null;
+    let countdownInterval = null;
+    let qrInstance = null;
+
+    async function loadBatches() {
+      const batches = await Api.request("tutor", "/tutor/batches");
+      document.getElementById("batchSelect").innerHTML = batches
+        .map((b) => `<option value="${b.id}" ${b.id === preselectBatchId ? "selected" : ""}>${escapeHtml(b.name)}</option>`)
+        .join("");
+    }
+
+    async function drawQr() {
+      if (!currentSession) return;
+      try {
+        const data = await Api.request("tutor", `/qr/current?session_id=${currentSession.session_id}`);
+        const payload = JSON.stringify({
+          session_id: data.session_id,
+          batch_id: data.batch_id,
+          token: data.token,
+          expires_at: data.expires_at,
+        });
+        if (!qrInstance) {
+          document.getElementById("qrCanvas").innerHTML = "";
+          qrInstance = new QRCode(document.getElementById("qrCanvas"), {
+            width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M,
+          });
+        }
+        qrInstance.makeCode(payload);
+
+        const msLeft = data.expires_at - Date.now();
+        scheduleRotation(Math.max(msLeft, 500));
+        startCountdown(data.expires_at);
+      } catch (err) {
+        if (err.message.includes("closed")) {
+          endSessionUi();
+          showAlert(document.getElementById("alertBox"), "Attendance session has closed.", "info");
+        } else {
+          showAlert(document.getElementById("alertBox"), err.message);
+        }
+      }
+    }
+
+    function scheduleRotation(delayMs) {
+      clearTimeout(qrRotateTimeout);
+      qrRotateTimeout = setTimeout(drawQr, delayMs + 150);
+    }
+
+    function startCountdown(expiresAt) {
+      clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        const secs = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+        document.getElementById("qrTimer").textContent = `rotates in ${secs}s`;
+      }, 250);
+    }
+
+    async function refreshLive() {
+      if (!currentSession) return;
+      try {
+        const data = await Api.request("tutor", `/attendance/batch/${currentSession.batch_id}`);
+        const present = data.students.filter((s) => s.status === "present");
+        document.getElementById("presentCount").textContent = `${present.length} / ${data.students.length} present`;
+        document.getElementById("liveBody").innerHTML = data.students.map((s) => `
+          <tr>
+            <td>${escapeHtml(s.name)}</td>
+            <td>${s.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-muted">Not yet</span>`}</td>
+            <td>${s.timestamp || "-"}</td>
+          </tr>
+        `).join("");
+      } catch (err) {
+        // non-fatal; keep polling
+      }
+    }
+
+    function endSessionUi() {
+      clearTimeout(qrRotateTimeout);
+      clearInterval(countdownInterval);
+      clearInterval(liveInterval);
+      currentSession = null;
+      document.getElementById("qrCard").classList.add("hidden");
+      document.getElementById("sessionControls").innerHTML = `<button class="btn" id="startBtn">Start Attendance Session</button>`;
+      document.getElementById("startBtn").addEventListener("click", startSession);
+    }
+
+    async function startSession() {
+      const batchId = document.getElementById("batchSelect").value;
+      if (!batchId) return;
+      try {
+        const data = await Api.request("tutor", "/qr/start", { method: "POST", body: { batch_id: batchId } });
+        currentSession = { session_id: data.session_id, batch_id: data.batch_id, ends_at: data.ends_at };
+        document.getElementById("sessionEndsAt").textContent = new Date(data.ends_at).toLocaleTimeString();
+        document.getElementById("qrCard").classList.remove("hidden");
+        document.getElementById("liveCard").classList.remove("hidden");
+        document.getElementById("sessionControls").innerHTML = `<span class="badge badge-success">Session active</span>`;
+        await drawQr();
+        await refreshLive();
+        liveInterval = setInterval(refreshLive, 4000);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    }
+
+    document.getElementById("startBtn").addEventListener("click", startSession);
+
+    document.getElementById("stopBtn").addEventListener("click", async () => {
+      if (!currentSession) return;
+      try {
+        await Api.request("tutor", "/qr/stop", { method: "POST", body: { session_id: currentSession.session_id } });
+        await refreshLive();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      } finally {
+        endSessionUi();
+      }
+    });
+
+    loadBatches().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+  </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Marks Upload · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("marks.html", `
+      <div id="alertBox"></div>
+      <div class="card">
+        <label>Select Exam</label>
+        <select id="examSelect"></select>
+      </div>
+      <div class="card" id="marksCard" style="display:none;">
+        <div class="flex-between">
+          <h2 class="mb-0" id="examHeading"></h2>
+          <button class="btn" id="saveMarksBtn">Save All Marks</button>
+        </div>
+        <div class="table-wrap mt-16">
+          <table>
+            <thead><tr><th>Student</th><th>Marks Obtained</th><th>Remarks</th></tr></thead>
+            <tbody id="marksBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+    setPageTitle("Marks Upload");
+
+    let exams = [];
+    let currentExam = null;
+    let batchStudents = [];
+    let existingMarks = {};
+
+    const params = new URLSearchParams(location.search);
+    const preselectExamId = params.get("exam_id");
+
+    async function loadExams() {
+      exams = await Api.request("admin", "/admin/exams");
+      document.getElementById("examSelect").innerHTML =
+        `<option value="">— select an exam —</option>` +
+        exams.map((e) => `<option value="${e.id}" ${e.id === preselectExamId ? "selected" : ""}>${escapeHtml(e.exam_name)} (${e.exam_code})</option>`).join("");
+    }
+
+    async function loadExamMarks(examId) {
+      currentExam = exams.find((e) => e.id === examId);
+      if (!currentExam) return;
+
+      document.getElementById("marksCard").style.display = "block";
+      document.getElementById("examHeading").textContent = `${currentExam.exam_name} — Total: ${currentExam.total_marks}`;
+
+      const [studentsRes, examDetail] = await Promise.all([
+        Api.request("admin", `/admin/batch/${currentExam.batch_id}/students`),
+        Api.request("admin", `/admin/exam/${currentExam.exam_code}`),
+      ]);
+      batchStudents = studentsRes;
+      existingMarks = {};
+      examDetail.marks.forEach((m) => { existingMarks[m.student_id] = m; });
+
+      const tbody = document.getElementById("marksBody");
+      tbody.innerHTML = batchStudents.map((s) => {
+        const existing = existingMarks[s.id];
+        return `<tr data-student="${s.id}">
+          <td>${escapeHtml(s.name)}</td>
+          <td><input type="number" class="marksInput" min="0" max="${currentExam.total_marks}" value="${existing ? existing.marks_obtained : ""}" /></td>
+          <td><input type="text" class="remarksInput" value="${existing && existing.remarks ? escapeHtml(existing.remarks) : ""}" /></td>
+        </tr>`;
+      }).join("");
+    }
+
+    document.getElementById("examSelect").addEventListener("change", (e) => {
+      if (e.target.value) loadExamMarks(e.target.value).catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+      else document.getElementById("marksCard").style.display = "none";
+    });
+
+    document.getElementById("saveMarksBtn").addEventListener("click", async () => {
+      const rows = [...document.querySelectorAll("#marksBody tr")];
+      const marks = rows
+        .map((row) => {
+          const marksVal = row.querySelector(".marksInput").value;
+          if (marksVal === "") return null;
+          return {
+            student_id: row.dataset.student,
+            marks_obtained: parseInt(marksVal, 10),
+            remarks: row.querySelector(".remarksInput").value.trim() || undefined,
+          };
+        })
+        .filter(Boolean);
+
+      try {
+        await Api.request("admin", "/admin/exam/upload-marks", {
+          method: "POST",
+          body: { exam_id: currentExam.id, marks },
+        });
+        showAlert(document.getElementById("alertBox"), `Saved marks for ${marks.length} students.`, "success");
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    (async () => {
+      try {
+        await loadExams();
+        if (preselectExamId) await loadExamMarks(preselectExamId);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

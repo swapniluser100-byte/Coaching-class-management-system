@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manage Students · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("students.html", `
+      <div id="alertBox"></div>
+      <div class="grid" style="grid-template-columns: 340px 1fr;">
+        <div class="card" id="formCard">
+          <h2 id="formTitle">Add Student</h2>
+          <form id="studentForm">
+            <input type="hidden" id="studentId" />
+            <label>Name</label>
+            <input id="name" required />
+            <label>Phone</label>
+            <input id="phone" required placeholder="9876543210" />
+            <label>Parent Phone</label>
+            <input id="parentPhone" />
+            <label>Class Level</label>
+            <select id="classLevel">
+              <option value="11th">11th</option>
+              <option value="12th">12th</option>
+              <option value="CET">CET</option>
+            </select>
+            <label>Assign to Batch (optional)</label>
+            <select id="batchId"><option value="">— none —</option></select>
+            <div class="flex gap-8 mt-16">
+              <button class="btn" type="submit" id="saveBtn">Save</button>
+              <button class="btn btn-secondary" type="button" id="resetBtn">Clear</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="flex-between">
+            <h2 class="mb-0">Students</h2>
+            <input id="searchBox" placeholder="Search name or phone…" style="max-width:220px;" />
+          </div>
+          <div class="table-wrap mt-16">
+            <table>
+              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Device</th><th>Status</th><th></th></tr></thead>
+              <tbody id="studentsBody"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `);
+    setPageTitle("Manage Students");
+
+    let allStudents = [];
+    let allBatches = [];
+
+    async function loadBatchesIntoSelect() {
+      allBatches = await Api.request("admin", "/admin/batches");
+      const sel = document.getElementById("batchId");
+      sel.innerHTML = `<option value="">— none —</option>` +
+        allBatches.map((b) => `<option value="${b.id}">${escapeHtml(b.name)} (${escapeHtml(b.class_level)})</option>`).join("");
+    }
+
+    function renderStudents(list) {
+      const tbody = document.getElementById("studentsBody");
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-muted">No students yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = list.map((s) => `
+        <tr>
+          <td>${s.photo_url ? `<img class="avatar" data-photo-key="${s.photo_url}" />` : `<div class="avatar"></div>`}</td>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${escapeHtml(s.phone)}</td>
+          <td>${escapeHtml(s.class_level || "-")}</td>
+          <td>${s.device_fingerprint ? `<span class="badge badge-success">Bound</span>` : `<span class="badge badge-muted">Not bound</span>`}</td>
+          <td>${s.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="editStudent('${s.id}')">Edit</button>
+            <button class="btn btn-secondary btn-sm" onclick="uploadPhoto('${s.id}')">Photo</button>
+            ${s.device_fingerprint ? `<button class="btn btn-secondary btn-sm" onclick="resetDevice('${s.id}')">Reset Device</button>` : ""}
+            <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+      loadPhotoThumbnails();
+    }
+
+    // Photo endpoints require a Bearer token, so <img src> can't hit them
+    // directly — fetch each as a blob and swap it in.
+    async function loadPhotoThumbnails() {
+      const imgs = [...document.querySelectorAll("img[data-photo-key]")];
+      await Promise.all(imgs.map(async (img) => {
+        try {
+          const res = await Api.request("admin", `/photos/${img.dataset.photoKey}`, { raw: true });
+          if (!res.ok) return;
+          const blob = await res.blob();
+          img.src = URL.createObjectURL(blob);
+        } catch {}
+      }));
+    }
+
+    async function loadStudents() {
+      allStudents = await Api.request("admin", "/admin/students");
+      renderStudents(allStudents);
+    }
+
+    document.getElementById("searchBox").addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase();
+      renderStudents(allStudents.filter((s) => s.name.toLowerCase().includes(q) || s.phone.includes(q)));
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      document.getElementById("studentForm").reset();
+      document.getElementById("studentId").value = "";
+      document.getElementById("formTitle").textContent = "Add Student";
+    });
+
+    window.editStudent = (id) => {
+      const s = allStudents.find((x) => x.id === id);
+      if (!s) return;
+      document.getElementById("studentId").value = s.id;
+      document.getElementById("name").value = s.name;
+      document.getElementById("phone").value = s.phone;
+      document.getElementById("parentPhone").value = s.parent_phone || "";
+      document.getElementById("classLevel").value = s.class_level || "11th";
+      document.getElementById("formTitle").textContent = "Edit Student";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.deleteStudent = async (id) => {
+      if (!confirm("Delete this student? This cannot be undone.")) return;
+      try {
+        await Api.request("admin", "/admin/student/delete", { method: "POST", body: { id } });
+        await loadStudents();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    };
+
+    window.resetDevice = async (id) => {
+      if (!confirm("Reset this student's registered device? They will be able to bind a new device on next login.")) return;
+      await Api.request("admin", "/admin/student/update", { method: "POST", body: { id, reset_device: true } });
+      await loadStudents();
+    };
+
+    window.uploadPhoto = (id) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try {
+          await Api.request("admin", `/admin/student/${id}/photo`, { method: "POST", body: file, isForm: true });
+          await loadStudents();
+        } catch (err) {
+          showAlert(document.getElementById("alertBox"), err.message);
+        }
+      };
+      input.click();
+    };
+
+    document.getElementById("studentForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("studentId").value;
+      const payload = {
+        name: document.getElementById("name").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        parent_phone: document.getElementById("parentPhone").value.trim() || undefined,
+        class_level: document.getElementById("classLevel").value,
+        batch_id: document.getElementById("batchId").value || undefined,
+      };
+      try {
+        if (id) {
+          await Api.request("admin", "/admin/student/update", { method: "POST", body: { id, ...payload } });
+        } else {
+          await Api.request("admin", "/admin/student/create", { method: "POST", body: payload });
+        }
+        document.getElementById("studentForm").reset();
+        document.getElementById("studentId").value = "";
+        document.getElementById("formTitle").textContent = "Add Student";
+        await loadStudents();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    (async () => {
+      try {
+        await loadBatchesIntoSelect();
+        await loadStudents();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>
