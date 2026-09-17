@@ -86,7 +86,7 @@ admin.post("/student/create", async (c) => {
 admin.post("/student/update", async (c) => {
   const b = await c.req.json<{
     id: string; name?: string; phone?: string; parent_phone?: string; class_level?: string;
-    active?: boolean; reset_device?: boolean;
+    active?: boolean; reset_device?: boolean; batch_id?: string;
   }>();
   if (!b.id) return fail(c, "id is required", 400);
 
@@ -105,6 +105,12 @@ admin.post("/student/update", async (c) => {
     b.reset_device ? 1 : 0,
     b.id
   ).run();
+
+  if (b.batch_id) {
+    await c.env.DB.prepare(
+      "INSERT OR IGNORE INTO batch_students (id, batch_id, student_id) VALUES (?, ?, ?)"
+    ).bind(newId("bs"), b.batch_id, b.id).run();
+  }
 
   return ok(c, { id: b.id });
 });
