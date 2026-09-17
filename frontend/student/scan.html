@@ -18,6 +18,7 @@
   <script src="../shared/js/config.js"></script>
   <script src="../shared/js/api.js"></script>
   <script src="../shared/js/fingerprint.js"></script>
+  <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
@@ -37,7 +38,7 @@
         <div id="resultIcon" style="font-size:42px;"></div>
         <h2 id="resultTitle"></h2>
         <p id="resultMessage" class="text-muted"></p>
-        <button class="btn btn-secondary mt-16" id="scanAgainBtn">Scan Again</button>
+        <button class="btn btn-secondary mt-16" id="scanAgainBtn">${iconSvg("refresh-cw")} Scan Again</button>
       </div>
     `);
 

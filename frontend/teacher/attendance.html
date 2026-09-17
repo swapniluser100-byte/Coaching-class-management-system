@@ -9,6 +9,7 @@
 <body>
   <script src="../shared/js/config.js"></script>
   <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
@@ -21,7 +22,7 @@
         <label>Batch</label>
         <select id="batchSelect"></select>
         <div id="sessionControls" class="mt-16">
-          <button class="btn" id="startBtn">Start Attendance Session</button>
+          <button class="btn" id="startBtn">${iconSvg("play")} Start Attendance Session</button>
         </div>
       </div>
 
@@ -30,7 +31,7 @@
           <div id="qrCanvas"></div>
           <div class="qr-timer" id="qrTimer">rotates in 10s</div>
           <p class="text-muted" style="font-size:13px;">Students scan this from the student portal's "Scan QR" page. Ends automatically at <strong id="sessionEndsAt"></strong>.</p>
-          <button class="btn btn-danger" id="stopBtn">End Session</button>
+          <button class="btn btn-danger" id="stopBtn">${iconSvg("stop")} End Session</button>
         </div>
       </div>
 
@@ -132,7 +133,7 @@
       clearInterval(liveInterval);
       currentSession = null;
       document.getElementById("qrCard").classList.add("hidden");
-      document.getElementById("sessionControls").innerHTML = `<button class="btn" id="startBtn">Start Attendance Session</button>`;
+      document.getElementById("sessionControls").innerHTML = `<button class="btn" id="startBtn">${iconSvg("play")} Start Attendance Session</button>`;
       document.getElementById("startBtn").addEventListener("click", startSession);
     }
 

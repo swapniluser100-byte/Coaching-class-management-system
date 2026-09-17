@@ -15,15 +15,24 @@
       <form id="phoneForm">
         <label for="phone">Phone Number</label>
         <input type="tel" id="phone" required placeholder="9876543210" autocomplete="username" />
-        <button class="btn btn-block mt-16" type="submit" id="sendOtpBtn">Send OTP</button>
+        <button class="btn btn-block mt-16" type="submit" id="sendOtpBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send OTP
+        </button>
       </form>
 
       <form id="otpForm" class="hidden">
         <p class="text-muted" id="otpHint"></p>
         <label for="otp">Enter OTP</label>
         <input type="text" id="otp" required maxlength="6" inputmode="numeric" />
-        <button class="btn btn-block mt-16" type="submit" id="verifyBtn">Verify & Log In</button>
-        <button type="button" class="btn btn-secondary btn-block mt-8" id="backBtn">Use a different number</button>
+        <button class="btn btn-block mt-16" type="submit" id="verifyBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Verify &amp; Log In
+        </button>
+        <button type="button" class="btn btn-secondary btn-block mt-8" id="backBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Use a different number
+        </button>
       </form>
     </div>
   </div>

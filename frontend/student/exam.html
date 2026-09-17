@@ -9,6 +9,7 @@
 <body>
   <script src="../shared/js/config.js"></script>
   <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireStudentAuth();
@@ -20,7 +21,7 @@
         <form id="examForm">
           <div class="flex gap-8">
             <input id="examCode" placeholder="e.g. K7M2QWXT9" style="text-transform:uppercase;" required />
-            <button class="btn" type="submit">View</button>
+            <button class="btn" type="submit">${iconSvg("search")} View</button>
           </div>
         </form>
       </div>

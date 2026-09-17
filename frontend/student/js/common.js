@@ -22,7 +22,7 @@ function renderStudentShell(activeHref, innerHtml) {
   ).join("");
 
   document.body.innerHTML = `
-    <div class="mobile-nav">${navHtml}<a href="#" id="logoutLink" style="margin-left:auto;">Log out</a></div>
+    <div class="mobile-nav">${navHtml}<a href="#" id="logoutLink" style="margin-left:auto;">${iconSvg("log-out")} Log out</a></div>
     <div class="container-narrow" id="pageContent">${innerHtml}</div>
   `;
   document.getElementById("logoutLink").addEventListener("click", (e) => {

@@ -9,6 +9,7 @@
 <body>
   <script src="../shared/js/config.js"></script>
   <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireTeacherAuth();
@@ -33,7 +34,7 @@
             <p class="text-muted" style="font-size:13px;">${escapeHtml(b.schedule_days || "")} ${escapeHtml(b.schedule_time || "")}</p>
             <div class="flex-between mt-16">
               <span class="badge badge-muted">${b.strength} students</span>
-              <a class="btn btn-sm" href="attendance.html?batch_id=${b.id}">Start Attendance</a>
+              <a class="btn btn-sm" href="attendance.html?batch_id=${b.id}">${iconSvg("play")} Start Attendance</a>
             </div>
           </div>
         `).join("");

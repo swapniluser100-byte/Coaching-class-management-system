@@ -9,6 +9,7 @@
 <body>
   <script src="../shared/js/config.js"></script>
   <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireStudentAuth();
@@ -19,13 +20,13 @@
         <h2 id="studentName" class="mb-0"></h2>
         <p id="studentPhone"></p>
         <input type="file" id="photoInput" accept="image/*" class="hidden" />
-        <button class="btn btn-secondary btn-sm" id="changePhotoBtn">Update Photo</button>
+        <button class="btn btn-secondary btn-sm" id="changePhotoBtn">${iconSvg("camera")} Update Photo</button>
       </div>
       <div class="card">
         <h2>My Batches</h2>
         <div id="scheduleList"><p class="text-muted">Loading…</p></div>
       </div>
-      <a class="btn btn-block" href="scan.html">📷 Scan QR to Mark Attendance</a>
+      <a class="btn btn-block" href="scan.html">${iconSvg("camera")} Scan QR to Mark Attendance</a>
     `);
 
     async function loadProfile() {

@@ -9,6 +9,7 @@
 <body>
   <script src="../shared/js/config.js"></script>
   <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireTeacherAuth();
@@ -22,7 +23,7 @@
       <div class="card hidden" id="marksCard">
         <div class="flex-between">
           <h2 class="mb-0" id="examHeading"></h2>
-          <button class="btn" id="saveBtn">Save Marks</button>
+          <button class="btn" id="saveBtn">${iconSvg("save")} Save Marks</button>
         </div>
         <div class="table-wrap mt-16">
           <table>
