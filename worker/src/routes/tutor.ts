@@ -42,6 +42,24 @@ tutor.get("/exams", async (c) => {
   return ok(c, results);
 });
 
+// Returns already-saved marks for an exam so the Exams & Marks page can
+// pre-fill the table on load/refresh instead of always showing blanks.
+tutor.get("/exam/:id/marks", async (c) => {
+  const tutorId = c.get("jwtPayload").sub;
+  const examId = c.req.param("id");
+
+  const exam = await c.env.DB.prepare(
+    `SELECT e.id FROM exams e JOIN batches b ON b.id = e.batch_id WHERE e.id = ? AND b.tutor_id = ?`
+  ).bind(examId, tutorId).first();
+  if (!exam) return fail(c, "Exam not found for your batches", 404);
+
+  const { results } = await c.env.DB.prepare(
+    "SELECT student_id, marks_obtained, remarks FROM exam_marks WHERE exam_id = ?"
+  ).bind(examId).all();
+
+  return ok(c, results);
+});
+
 tutor.post("/exam/upload-marks", async (c) => {
   const tutorId = c.get("jwtPayload").sub;
 

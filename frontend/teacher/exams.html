@@ -59,17 +59,24 @@
       document.getElementById("marksCard").classList.remove("hidden");
       document.getElementById("examHeading").textContent = `${currentExam.exam_name} — Total: ${currentExam.total_marks}`;
 
-      const { students } = await Api.request("tutor", `/attendance/batch/${currentExam.batch_id}`);
+      const [{ students }, existingMarksList] = await Promise.all([
+        Api.request("tutor", `/attendance/batch/${currentExam.batch_id}`),
+        Api.request("tutor", `/tutor/exam/${currentExam.id}/marks`),
+      ]);
       currentStudents = students;
 
+      const existingMarks = {};
+      existingMarksList.forEach((m) => { existingMarks[m.student_id] = m; });
+
       const tbody = document.getElementById("marksBody");
-      tbody.innerHTML = students.map((s) => `
-        <tr data-student="${s.student_id}">
+      tbody.innerHTML = students.map((s) => {
+        const existing = existingMarks[s.student_id];
+        return `<tr data-student="${s.student_id}">
           <td>${escapeHtml(s.name)}</td>
-          <td><input type="number" class="marksInput" min="0" max="${currentExam.total_marks}" /></td>
-          <td><input type="text" class="remarksInput" /></td>
-        </tr>
-      `).join("");
+          <td><input type="number" class="marksInput" min="0" max="${currentExam.total_marks}" value="${existing ? existing.marks_obtained : ""}" /></td>
+          <td><input type="text" class="remarksInput" value="${existing && existing.remarks ? escapeHtml(existing.remarks) : ""}" /></td>
+        </tr>`;
+      }).join("");
     }
 
     document.getElementById("examSelect").addEventListener("change", (e) => {
@@ -99,8 +106,14 @@
 
     document.getElementById("downloadTemplateBtn").addEventListener("click", () => {
       if (!currentExam) return;
+      const byId = {};
+      currentStudents.forEach((s) => { byId[s.student_id] = s; });
       const rows = [["phone", "name", "marks_obtained", "remarks"]];
-      currentStudents.forEach((s) => rows.push([s.phone, s.name, "", ""]));
+      document.querySelectorAll("#marksBody tr").forEach((row) => {
+        const s = byId[row.dataset.student];
+        if (!s) return;
+        rows.push([s.phone, s.name, row.querySelector(".marksInput").value, row.querySelector(".remarksInput").value]);
+      });
       const safeName = currentExam.exam_name.replace(/[^a-z0-9]+/gi, "_");
       downloadCsv(`${safeName}_marks_template.csv`, rows);
     });
