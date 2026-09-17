@@ -19,5 +19,9 @@ const ICON_PATHS = {
 };
 
 function iconSvg(name) {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ""}</svg>`;
+  // Explicit width/height so the icon renders at a sane size even when used
+  // outside a .btn/.mobile-nav context that would otherwise size it via CSS —
+  // a bare inline SVG with only a viewBox can render at the browser's huge
+  // intrinsic default.
+  return `<svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ""}</svg>`;
 }
