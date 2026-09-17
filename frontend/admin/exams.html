@@ -16,8 +16,9 @@
       <div id="alertBox"></div>
       <div class="grid" style="grid-template-columns: 360px 1fr;">
         <div class="card">
-          <h2>Create / Schedule Exam</h2>
+          <h2 id="formHeading">Create / Schedule Exam</h2>
           <form id="examForm">
+            <input type="hidden" id="examId" />
             <label>Batch</label>
             <select id="batchId" required></select>
 
@@ -26,6 +27,7 @@
               <option value="classroom">Classroom (paper exam, marks uploaded by hand)</option>
               <option value="online">Online (students attempt on this portal)</option>
             </select>
+            <p class="text-muted hidden mt-8" id="lockedNote" style="font-size:12px;">Batch, type and question bank can't be changed once an exam exists — schedule a new one instead if you need a different batch or bank.</p>
 
             <label>Exam Name</label>
             <input id="examName" required placeholder="e.g. Unit Test 1" />
@@ -49,7 +51,10 @@
               <input id="durationMinutes" type="number" min="1" value="30" />
             </div>
 
-            <button class="btn btn-block mt-16" type="submit">Create Exam & Generate Code</button>
+            <div class="flex gap-8 mt-16">
+              <button class="btn" type="submit" id="submitBtn">Create Exam & Generate Code</button>
+              <button class="btn btn-secondary hidden" type="button" id="cancelEditBtn">Cancel</button>
+            </div>
           </form>
         </div>
 
@@ -98,14 +103,14 @@
 
     async function loadExams() {
       const batchId = document.getElementById("filterBatch").value;
-      const exams = await Api.request("admin", `/admin/exams${batchId ? "?batch_id=" + batchId : ""}`);
+      allExams = await Api.request("admin", `/admin/exams${batchId ? "?batch_id=" + batchId : ""}`);
       const tbody = document.getElementById("examsBody");
-      if (exams.length === 0) {
+      if (allExams.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-muted">No exams yet.</td></tr>`;
         return;
       }
       const batchName = (id) => allBatches.find((b) => b.id === id)?.name || "—";
-      tbody.innerHTML = exams.map((e) => `
+      tbody.innerHTML = allExams.map((e) => `
         <tr>
           <td>${escapeHtml(e.exam_name)}</td>
           <td>${e.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`}</td>
@@ -118,10 +123,87 @@
             <code style="font-weight:700; letter-spacing:0.05em;">${e.exam_code}</code>
             ${iconButton({ icon: "copy", title: "Copy Code", onclick: `copyCode('${e.exam_code}')` })}
           </td>
-          <td>${iconButton({ icon: "upload", title: "View / Upload Marks", href: `marks.html?exam_id=${e.id}` })}</td>
+          <td>
+            <div class="icon-row">
+              ${iconButton({ icon: "upload", title: "View / Upload Marks", href: `marks.html?exam_id=${e.id}` })}
+              ${iconButton({ icon: "edit", title: "Edit", onclick: `editExam('${e.id}')` })}
+              ${iconButton({ icon: "trash", title: "Delete", onclick: `deleteExam('${e.id}')`, variant: "danger" })}
+            </div>
+          </td>
         </tr>
       `).join("");
     }
+
+    let allExams = [];
+
+    function toDatetimeLocalValue(iso) {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    window.editExam = (id) => {
+      const e = allExams.find((x) => x.id === id);
+      if (!e) return;
+
+      document.getElementById("examId").value = e.id;
+      document.getElementById("formHeading").textContent = "Edit Exam";
+      document.getElementById("submitBtn").textContent = "Save Changes";
+      document.getElementById("cancelEditBtn").classList.remove("hidden");
+      document.getElementById("lockedNote").classList.remove("hidden");
+
+      document.getElementById("batchId").value = e.batch_id;
+      document.getElementById("batchId").disabled = true;
+      document.getElementById("examType").value = e.exam_type;
+      document.getElementById("examType").disabled = true;
+      document.getElementById("examName").value = e.exam_name;
+
+      const isOnline = e.exam_type === "online";
+      document.getElementById("classroomFields").classList.toggle("hidden", isOnline);
+      document.getElementById("onlineFields").classList.toggle("hidden", !isOnline);
+
+      if (isOnline) {
+        document.getElementById("templateId").value = e.template_id;
+        document.getElementById("templateId").disabled = true;
+        document.getElementById("startsAt").value = toDatetimeLocalValue(e.starts_at);
+        document.getElementById("endsAt").value = toDatetimeLocalValue(e.ends_at);
+        document.getElementById("durationMinutes").value = e.duration_minutes;
+      } else {
+        document.getElementById("examDate").value = e.exam_date;
+        document.getElementById("totalMarks").value = e.total_marks;
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    function resetForm() {
+      document.getElementById("examForm").reset();
+      document.getElementById("examId").value = "";
+      document.getElementById("formHeading").textContent = "Create / Schedule Exam";
+      document.getElementById("submitBtn").textContent = "Create Exam & Generate Code";
+      document.getElementById("cancelEditBtn").classList.add("hidden");
+      document.getElementById("lockedNote").classList.add("hidden");
+      document.getElementById("batchId").disabled = false;
+      document.getElementById("examType").disabled = false;
+      document.getElementById("templateId").disabled = false;
+      document.getElementById("classroomFields").classList.remove("hidden");
+      document.getElementById("onlineFields").classList.add("hidden");
+      document.getElementById("totalMarks").value = 100;
+      document.getElementById("durationMinutes").value = 30;
+    }
+
+    document.getElementById("cancelEditBtn").addEventListener("click", resetForm);
+
+    window.deleteExam = async (id) => {
+      const e = allExams.find((x) => x.id === id);
+      const label = e ? `"${e.exam_name}"` : "this exam";
+      if (!confirm(`Delete ${label}? This also deletes any marks and student attempts recorded for it — this can't be undone.`)) return;
+      try {
+        await Api.request("admin", "/admin/exam/delete", { method: "POST", body: { id } });
+        await loadExams();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    };
 
     window.copyCode = (code) => {
       navigator.clipboard.writeText(code);
@@ -135,35 +217,44 @@
       e.preventDefault();
       const alertBox = document.getElementById("alertBox");
       const isOnline = document.getElementById("examType").value === "online";
+      const editId = document.getElementById("examId").value;
 
       try {
         const body = {
-          batch_id: document.getElementById("batchId").value,
           exam_name: document.getElementById("examName").value.trim(),
-          exam_type: isOnline ? "online" : "classroom",
         };
+        if (!editId) {
+          body.batch_id = document.getElementById("batchId").value;
+          body.exam_type = isOnline ? "online" : "classroom";
+        }
 
         if (isOnline) {
-          const templateId = document.getElementById("templateId").value;
           const startsAt = document.getElementById("startsAt").value;
           const endsAt = document.getElementById("endsAt").value;
-          if (!templateId) { showAlert(alertBox, "Create a question bank first (see Question Banks)."); return; }
           if (!startsAt || !endsAt) { showAlert(alertBox, "Set both the opens-at and closes-at times."); return; }
-          body.template_id = templateId;
           body.starts_at = new Date(startsAt).toISOString();
           body.ends_at = new Date(endsAt).toISOString();
           body.duration_minutes = parseInt(document.getElementById("durationMinutes").value, 10);
           body.exam_date = startsAt.slice(0, 10);
+          if (!editId) {
+            const templateId = document.getElementById("templateId").value;
+            if (!templateId) { showAlert(alertBox, "Create a question bank first (see Question Banks)."); return; }
+            body.template_id = templateId;
+          }
         } else {
           body.exam_date = document.getElementById("examDate").value;
           body.total_marks = parseInt(document.getElementById("totalMarks").value, 10);
         }
 
-        const data = await Api.request("admin", "/admin/exam/create", { method: "POST", body });
-        document.getElementById("examForm").reset();
-        document.getElementById("totalMarks").value = 100;
-        document.getElementById("durationMinutes").value = 30;
-        showAlert(alertBox, `Exam created. Exam code: <strong>${data.exam_code}</strong>`, "success");
+        if (editId) {
+          await Api.request("admin", "/admin/exam/update", { method: "POST", body: { id: editId, ...body } });
+          showAlert(alertBox, "Exam updated.", "success");
+          resetForm();
+        } else {
+          const data = await Api.request("admin", "/admin/exam/create", { method: "POST", body });
+          resetForm();
+          showAlert(alertBox, `Exam created. Exam code: <strong>${data.exam_code}</strong>`, "success");
+        }
         await loadExams();
       } catch (err) {
         showAlert(alertBox, err.message);

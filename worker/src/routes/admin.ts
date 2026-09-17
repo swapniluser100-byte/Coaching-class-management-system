@@ -457,6 +457,57 @@ admin.post("/exam/create", async (c) => {
   return ok(c, { id, exam_code: examCode }, 201);
 });
 
+// Batch and exam_type are fixed at creation (per the "master template,
+// scheduled per batch" model) — schedule a new exam instead if either needs
+// to change. Everything else (name, date/window, marks) can be edited here.
+admin.post("/exam/update", async (c) => {
+  const b = await c.req.json<{
+    id: string;
+    exam_name?: string;
+    exam_date?: string;
+    total_marks?: number; // classroom only — online always recomputes from its template
+    starts_at?: string;
+    ends_at?: string;
+    duration_minutes?: number;
+  }>();
+  if (!b.id) return fail(c, "id is required", 400);
+
+  const exam = await c.env.DB.prepare("SELECT id, exam_type, template_id FROM exams WHERE id = ?")
+    .bind(b.id).first<{ id: string; exam_type: string; template_id: string | null }>();
+  if (!exam) return fail(c, "Exam not found", 404);
+
+  let totalMarks: number | null | undefined = b.total_marks;
+  if (exam.exam_type === "online" && exam.template_id) {
+    const sum = await c.env.DB.prepare("SELECT COALESCE(SUM(marks), 0) as total FROM exam_questions WHERE template_id = ?")
+      .bind(exam.template_id).first<{ total: number }>();
+    totalMarks = sum?.total ?? 0;
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE exams SET
+       exam_name = COALESCE(?, exam_name),
+       exam_date = COALESCE(?, exam_date),
+       total_marks = COALESCE(?, total_marks),
+       starts_at = COALESCE(?, starts_at),
+       ends_at = COALESCE(?, ends_at),
+       duration_minutes = COALESCE(?, duration_minutes)
+     WHERE id = ?`
+  ).bind(
+    b.exam_name ?? null, b.exam_date ?? null, totalMarks ?? null,
+    b.starts_at ?? null, b.ends_at ?? null, b.duration_minutes ?? null,
+    b.id
+  ).run();
+
+  return ok(c, { id: b.id });
+});
+
+admin.post("/exam/delete", async (c) => {
+  const { id } = await c.req.json<{ id: string }>();
+  if (!id) return fail(c, "id is required", 400);
+  await c.env.DB.prepare("DELETE FROM exams WHERE id = ?").bind(id).run();
+  return ok(c, { id });
+});
+
 admin.get("/exams", async (c) => {
   const batchId = c.req.query("batch_id");
   const query = batchId
