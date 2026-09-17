@@ -36,7 +36,7 @@ id = "0c9499c3d0b44adbba76bbed3fe1b15c"
 #   ADMIN_BOOTSTRAP_KEY  - one-time key allowing creation of the first admin
 # ---------------------------------------------------------------------------
 [vars]
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
 ATTENDANCE_WINDOW_MINUTES = "15"
 QR_ROTATE_SECONDS = "10"
 GEO_RADIUS_METERS = "100"
