@@ -5,6 +5,7 @@ const SESSION_TTL_SECONDS: Record<JwtRole, number> = {
   admin: 60 * 60 * 8, // 8 hours
   tutor: 60 * 60 * 12, // 12 hours
   student: 60 * 60 * 24 * 7, // 7 days
+  vendor: 60 * 60 * 8, // 8 hours
 };
 
 export async function issueJwt(

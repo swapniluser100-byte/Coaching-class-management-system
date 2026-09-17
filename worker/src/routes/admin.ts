@@ -643,10 +643,7 @@ admin.get("/analytics/overview", async (c) => {
 // General settings: tuition name + brand color shown across every portal.
 // ---------------------------------------------------------------------------
 admin.post("/settings/update", async (c) => {
-  const { tuition_name, brand_color, renewal_date, renewal_amount, renewal_contact } = await c.req.json<{
-    tuition_name?: string; brand_color?: string;
-    renewal_date?: string | null; renewal_amount?: number | null; renewal_contact?: string | null;
-  }>();
+  const { tuition_name, brand_color } = await c.req.json<{ tuition_name?: string; brand_color?: string }>();
 
   if (tuition_name !== undefined && !tuition_name.trim()) {
     return fail(c, "Tuition name can't be empty", 400);
@@ -654,32 +651,21 @@ admin.post("/settings/update", async (c) => {
   if (brand_color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(brand_color)) {
     return fail(c, "Brand color must be a hex color like #3654e0", 400);
   }
-  if (renewal_date !== undefined && renewal_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(renewal_date)) {
-    return fail(c, "Renewal date must be in YYYY-MM-DD format", 400);
-  }
-  if (renewal_amount !== undefined && renewal_amount !== null && (typeof renewal_amount !== "number" || renewal_amount < 0)) {
-    return fail(c, "Renewal amount must be a non-negative number", 400);
-  }
 
   const updates: [string, string][] = [];
-  const deletes: string[] = [];
   if (tuition_name !== undefined) updates.push(["tuition_name", tuition_name.trim()]);
   if (brand_color !== undefined) updates.push(["brand_color", brand_color]);
-  if (renewal_date !== undefined) { if (renewal_date === null) deletes.push("renewal_date"); else updates.push(["renewal_date", renewal_date]); }
-  if (renewal_amount !== undefined) { if (renewal_amount === null) deletes.push("renewal_amount"); else updates.push(["renewal_amount", String(renewal_amount)]); }
-  if (renewal_contact !== undefined) { if (!renewal_contact || !renewal_contact.trim()) deletes.push("renewal_contact"); else updates.push(["renewal_contact", renewal_contact.trim()]); }
 
   for (const [key, value] of updates) {
     await c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
       .bind(key, value).run();
   }
-  for (const key of deletes) {
-    await c.env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(key).run();
-  }
 
-  return ok(c, { updated: updates.map(([key]) => key), removed: deletes });
+  return ok(c, { updated: updates.map(([key]) => key) });
 });
 
+// Read-only for the tuition's own admin — only a vendor (see routes/vendor.ts)
+// can set these, so the admin can see the reminder but not edit it away.
 admin.get("/settings/renewal", async (c) => {
   const { results } = await c.env.DB.prepare("SELECT key, value FROM settings WHERE key IN ('renewal_date', 'renewal_amount', 'renewal_contact')").all<{ key: string; value: string }>();
   const map = Object.fromEntries(results.map((r) => [r.key, r.value]));

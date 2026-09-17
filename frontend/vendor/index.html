@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vendor Login · Tuition Management</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card card">
+      <div class="auth-logo">🔧 Vendor Login</div>
+      <p class="text-center text-muted mb-0" style="font-size:12.5px;">Service-provider access — manages the renewal reminder only.</p>
+      <div id="alertBox" class="mt-16"></div>
+      <form id="loginForm">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="username" />
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password" />
+        <button class="btn btn-block mt-16" type="submit" id="loginBtn">Log in</button>
+      </form>
+      <p class="text-center mt-16" style="font-size:13px;">
+        First time setup? <a href="#" id="bootstrapLink">Create the vendor account</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script>
+    const alertBox = document.getElementById("alertBox");
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("loginBtn");
+      btn.disabled = true;
+      alertBox.innerHTML = "";
+      try {
+        const data = await Api.request("vendor", "/vendor/login", {
+          method: "POST",
+          body: {
+            email: document.getElementById("email").value.trim(),
+            password: document.getElementById("password").value,
+          },
+        });
+        Api.setToken("vendor", data.token);
+        window.location.href = "renewal.html";
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("bootstrapLink").addEventListener("click", async (e) => {
+      e.preventDefault();
+      const email = prompt("Vendor email:");
+      if (!email) return;
+      const password = prompt("Vendor password (min 8 chars):");
+      if (!password) return;
+      const bootstrapKey = prompt("Bootstrap key (VENDOR_BOOTSTRAP_KEY secret set on the Worker):");
+      if (!bootstrapKey) return;
+      try {
+        await Api.request(null, "/vendor/bootstrap", {
+          method: "POST",
+          body: { email, password, bootstrap_key: bootstrapKey },
+        });
+        alertBox.innerHTML = `<div class="alert alert-success">Vendor account created. You can log in now.</div>`;
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>

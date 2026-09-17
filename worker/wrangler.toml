@@ -34,6 +34,7 @@ id = "0c9499c3d0b44adbba76bbed3fe1b15c"
 #   JWT_SECRET          - HMAC secret used to sign all JWTs
 #   QR_HMAC_SECRET       - server-side pepper mixed into per-session QR secrets
 #   ADMIN_BOOTSTRAP_KEY  - one-time key allowing creation of the first admin
+#   VENDOR_BOOTSTRAP_KEY - one-time key allowing creation of the vendor account
 # ---------------------------------------------------------------------------
 [vars]
 ENVIRONMENT = "development"

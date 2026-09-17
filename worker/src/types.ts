@@ -6,6 +6,7 @@ export type Env = {
   JWT_SECRET: string;
   QR_HMAC_SECRET: string;
   ADMIN_BOOTSTRAP_KEY: string;
+  VENDOR_BOOTSTRAP_KEY: string;
 
   ENVIRONMENT: string;
   ATTENDANCE_WINDOW_MINUTES: string;
@@ -13,7 +14,7 @@ export type Env = {
   GEO_RADIUS_METERS: string;
 };
 
-export type JwtRole = "admin" | "tutor" | "student";
+export type JwtRole = "admin" | "tutor" | "student" | "vendor";
 
 export type AppJwtPayload = {
   sub: string;

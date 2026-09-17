@@ -244,3 +244,17 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- ---------------------------------------------------------------------------
+-- vendor_users - the service provider's own login, separate from the
+-- tuition's own admin account. Only a vendor can set the renewal reminder
+-- (Next Renewal Date / Amount / Contact) shown in the admin console; the
+-- tuition's admin can see it but not edit it.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vendor_users (
+  id            TEXT PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name          TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);

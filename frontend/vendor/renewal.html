@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Renewal Reminder · Vendor</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script>
+    const token = Api.getToken("vendor");
+    if (!token) window.location.href = "index.html";
+  </script>
+
+  <div class="container-narrow">
+    <div class="flex-between mt-16">
+      <h1 class="mb-0">Renewal Reminder</h1>
+      <button class="btn btn-secondary btn-sm" id="logoutBtn">Log out</button>
+    </div>
+    <p class="text-muted">
+      This is the only thing a vendor account manages. It's shown to the tuition's own admin as a
+      read-only line in their Settings page, and as a dismissible banner in their console once the
+      date is within 14 days or past. It never blocks or restricts their app.
+    </p>
+
+    <div id="alertBox"></div>
+    <div class="card">
+      <label>Next Renewal Date</label>
+      <input id="renewalDate" type="date" />
+      <label>Amount Due</label>
+      <input id="renewalAmount" type="number" min="0" step="0.01" placeholder="e.g. 500" />
+      <label>Contact for Renewal</label>
+      <input id="renewalContact" placeholder="e.g. billing@example.com or a phone number" />
+      <div class="flex gap-8 mt-16">
+        <button class="btn" id="saveBtn">Save</button>
+        <button class="btn btn-secondary" id="clearBtn">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      try {
+        const renewal = await Api.request("vendor", "/vendor/settings/renewal");
+        document.getElementById("renewalDate").value = renewal.renewal_date || "";
+        document.getElementById("renewalAmount").value = renewal.renewal_amount ?? "";
+        document.getElementById("renewalContact").value = renewal.renewal_contact || "";
+      } catch (err) {
+        document.getElementById("alertBox").innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    })();
+
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      const alertBox = document.getElementById("alertBox");
+      const renewal_date = document.getElementById("renewalDate").value || null;
+      const amountRaw = document.getElementById("renewalAmount").value.trim();
+      const renewal_amount = amountRaw ? parseFloat(amountRaw) : null;
+      const renewal_contact = document.getElementById("renewalContact").value.trim() || null;
+      try {
+        await Api.request("vendor", "/vendor/settings/renewal", { method: "POST", body: { renewal_date, renewal_amount, renewal_contact } });
+        alertBox.innerHTML = `<div class="alert alert-success">Saved.</div>`;
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", async () => {
+      if (!confirm("Clear the renewal reminder? The banner will stop showing until you set a new date.")) return;
+      const alertBox = document.getElementById("alertBox");
+      try {
+        await Api.request("vendor", "/vendor/settings/renewal", { method: "POST", body: { renewal_date: null, renewal_amount: null, renewal_contact: null } });
+        document.getElementById("renewalDate").value = "";
+        document.getElementById("renewalAmount").value = "";
+        document.getElementById("renewalContact").value = "";
+        alertBox.innerHTML = `<div class="alert alert-success">Cleared.</div>`;
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      Api.clearToken("vendor");
+      window.location.href = "index.html";
+    });
+  </script>
+</body>
+</html>

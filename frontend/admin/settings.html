@@ -40,17 +40,8 @@
       </div>
       <div class="card">
         <h2>Plan / Renewal</h2>
-        <p>Optional reminder shown as a banner in this console when the renewal date is near or past. It never restricts access — it's purely informational.</p>
-        <label>Next Renewal Date</label>
-        <input id="renewalDate" type="date" />
-        <label>Amount Due</label>
-        <input id="renewalAmount" type="number" min="0" step="0.01" placeholder="e.g. 500" />
-        <label>Contact for Renewal</label>
-        <input id="renewalContact" placeholder="e.g. billing@example.com or a phone number" />
-        <div class="flex gap-8 mt-16">
-          <button class="btn" id="saveRenewalBtn">Save</button>
-          <button class="btn btn-secondary" id="clearRenewalBtn">Clear</button>
-        </div>
+        <p>Set by your service provider — shown here for your information, and as a banner in this console when the date is near or past. It never restricts access.</p>
+        <div id="renewalReadonly"></div>
       </div>
       <div class="card">
         <h2>API Connection</h2>
@@ -99,41 +90,21 @@
       }
       try {
         const renewal = await Api.request("admin", "/admin/settings/renewal");
-        document.getElementById("renewalDate").value = renewal.renewal_date || "";
-        document.getElementById("renewalAmount").value = renewal.renewal_amount ?? "";
-        document.getElementById("renewalContact").value = renewal.renewal_contact || "";
+        const el = document.getElementById("renewalReadonly");
+        if (!renewal.renewal_date) {
+          el.innerHTML = `<p class="text-muted mb-0" style="font-size:14px;">No renewal date on file.</p>`;
+        } else {
+          const dateText = new Date(`${renewal.renewal_date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+          el.innerHTML = `
+            <p class="mb-0" style="font-size:14px;"><strong>Next renewal:</strong> ${escapeHtml(dateText)}</p>
+            ${renewal.renewal_amount != null ? `<p class="mb-0" style="font-size:14px;"><strong>Amount:</strong> ${escapeHtml(String(renewal.renewal_amount))}</p>` : ""}
+            ${renewal.renewal_contact ? `<p class="mb-0" style="font-size:14px;"><strong>Contact:</strong> ${escapeHtml(renewal.renewal_contact)}</p>` : ""}
+          `;
+        }
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
     })();
-
-    document.getElementById("saveRenewalBtn").addEventListener("click", async () => {
-      const alertBox = document.getElementById("alertBox");
-      const renewal_date = document.getElementById("renewalDate").value || null;
-      const amountRaw = document.getElementById("renewalAmount").value.trim();
-      const renewal_amount = amountRaw ? parseFloat(amountRaw) : null;
-      const renewal_contact = document.getElementById("renewalContact").value.trim() || null;
-      try {
-        await Api.request("admin", "/admin/settings/update", { method: "POST", body: { renewal_date, renewal_amount, renewal_contact } });
-        showAlert(alertBox, "Saved. The banner (if applicable) updates on next page load.", "success");
-      } catch (err) {
-        showAlert(alertBox, err.message);
-      }
-    });
-
-    document.getElementById("clearRenewalBtn").addEventListener("click", async () => {
-      if (!confirm("Clear the renewal reminder? The banner will stop showing until you set a new date.")) return;
-      const alertBox = document.getElementById("alertBox");
-      try {
-        await Api.request("admin", "/admin/settings/update", { method: "POST", body: { renewal_date: null, renewal_amount: null, renewal_contact: null } });
-        document.getElementById("renewalDate").value = "";
-        document.getElementById("renewalAmount").value = "";
-        document.getElementById("renewalContact").value = "";
-        showAlert(alertBox, "Cleared.", "success");
-      } catch (err) {
-        showAlert(alertBox, err.message);
-      }
-    });
 
     document.getElementById("uploadLogoBtn").addEventListener("click", () => {
       document.getElementById("logoInput").click();
