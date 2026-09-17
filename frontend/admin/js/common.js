@@ -46,7 +46,7 @@ function renderAdminShell(activeHref, innerHtml) {
         <div class="admin-mobile-nav mobile-nav">${mobileNavHtml}<a href="#" id="logoutLinkMobile" style="margin-left:auto;">Log out</a></div>
         <div class="topbar">
           <div id="pageTitle" style="font-weight:700;"></div>
-          <div class="text-muted" style="font-size:13px;">Pune Tuition Classes</div>
+          <div class="text-muted" style="font-size:13px;" data-brand-name>Tuition Management System</div>
         </div>
         <div class="container">${innerHtml}</div>
       </div>
