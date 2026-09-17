@@ -55,6 +55,7 @@ admin.use("/*", requireAuth("admin"));
 admin.get("/students", async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.name, s.phone, s.parent_phone, s.class_level, s.photo_url, s.device_fingerprint, s.active, s.created_at,
+       (s.pin_hash IS NOT NULL) as pin_set, s.pin_failed_attempts,
        (SELECT bs.batch_id FROM batch_students bs WHERE bs.student_id = s.id ORDER BY bs.created_at DESC LIMIT 1) as batch_id,
        (SELECT b.name FROM batch_students bs JOIN batches b ON b.id = bs.batch_id WHERE bs.student_id = s.id ORDER BY bs.created_at DESC LIMIT 1) as batch_name
      FROM students s ORDER BY s.created_at DESC`
@@ -116,6 +117,21 @@ admin.post("/student/update", async (c) => {
   }
 
   return ok(c, { id: b.id });
+});
+
+// Sets (or resets) a student's 4-digit PIN for login-free attendance
+// marking. Also clears any accumulated failed-attempt lockout.
+admin.post("/student/set-pin", async (c) => {
+  const { id, pin } = await c.req.json<{ id: string; pin: string }>();
+  if (!id || !pin) return fail(c, "id and pin are required", 400);
+  if (!/^\d{4}$/.test(pin)) return fail(c, "PIN must be exactly 4 digits", 400);
+
+  const pinHash = await hashPassword(pin);
+  await c.env.DB.prepare(
+    "UPDATE students SET pin_hash = ?, pin_failed_attempts = 0 WHERE id = ?"
+  ).bind(pinHash, id).run();
+
+  return ok(c, { id });
 });
 
 admin.post("/student/delete", async (c) => {

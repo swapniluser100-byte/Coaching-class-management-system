@@ -47,8 +47,8 @@
           </div>
           <div class="table-wrap mt-16">
             <table>
-              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Batch</th><th>Device</th><th>Status</th><th></th></tr></thead>
-              <tbody id="studentsBody"><tr><td colspan="8" class="text-muted">Loading…</td></tr></tbody>
+              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Batch</th><th>Device</th><th>PIN</th><th>Status</th><th></th></tr></thead>
+              <tbody id="studentsBody"><tr><td colspan="9" class="text-muted">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -69,7 +69,7 @@
     function renderStudents(list) {
       const tbody = document.getElementById("studentsBody");
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-muted">No students yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-muted">No students yet.</td></tr>`;
         return;
       }
       tbody.innerHTML = list.map((s) => `
@@ -80,11 +80,13 @@
           <td>${escapeHtml(s.class_level || "-")}</td>
           <td>${s.batch_name ? escapeHtml(s.batch_name) : `<span class="badge badge-muted">Unassigned</span>`}</td>
           <td>${s.device_fingerprint ? `<span class="badge badge-success">Bound</span>` : `<span class="badge badge-muted">Not bound</span>`}</td>
+          <td>${s.pin_failed_attempts >= 5 ? `<span class="badge badge-danger">Locked</span>` : s.pin_set ? `<span class="badge badge-success">Set</span>` : `<span class="badge badge-muted">Not set</span>`}</td>
           <td>${s.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
           <td>
             <div class="icon-row">
               ${iconButton({ icon: "edit", title: "Edit", onclick: `editStudent('${s.id}')` })}
               ${iconButton({ icon: "camera", title: "Upload Photo", onclick: `uploadPhoto('${s.id}')` })}
+              ${iconButton({ icon: "key", title: s.pin_set ? "Reset PIN" : "Set PIN", onclick: `setPin('${s.id}')` })}
               ${s.device_fingerprint ? iconButton({ icon: "reset", title: "Reset Device", onclick: `resetDevice('${s.id}')` }) : ""}
               ${iconButton({ icon: "trash", title: "Delete", onclick: `deleteStudent('${s.id}')`, variant: "danger" })}
             </div>
@@ -151,6 +153,19 @@
       if (!confirm("Reset this student's registered device? They will be able to bind a new device on next login.")) return;
       await Api.request("admin", "/admin/student/update", { method: "POST", body: { id, reset_device: true } });
       await loadStudents();
+    };
+
+    window.setPin = async (id) => {
+      const pin = prompt("Enter a new 4-digit PIN for this student (used for login-free attendance marking):");
+      if (pin === null) return;
+      if (!/^\d{4}$/.test(pin)) { alert("PIN must be exactly 4 digits."); return; }
+      try {
+        await Api.request("admin", "/admin/student/set-pin", { method: "POST", body: { id, pin } });
+        showAlert(document.getElementById("alertBox"), "PIN saved. Also clears any previous lockout.", "success");
+        await loadStudents();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
     };
 
     window.uploadPhoto = (id) => {

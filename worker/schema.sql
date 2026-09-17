@@ -51,15 +51,17 @@ CREATE TABLE IF NOT EXISTS batches (
 -- students
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS students (
-  id                 TEXT PRIMARY KEY,
-  name               TEXT NOT NULL,
-  phone              TEXT UNIQUE NOT NULL,
-  parent_phone       TEXT,
-  class_level        TEXT,
-  device_fingerprint TEXT,       -- bound on first successful OTP login
-  photo_url          TEXT,       -- R2 object URL/key
-  active             INTEGER NOT NULL DEFAULT 1,
-  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  id                  TEXT PRIMARY KEY,
+  name                TEXT NOT NULL,
+  phone               TEXT UNIQUE NOT NULL,
+  parent_phone        TEXT,
+  class_level         TEXT,
+  device_fingerprint  TEXT,       -- bound on first successful OTP login or PIN attendance mark
+  photo_url           TEXT,       -- R2 object URL/key
+  pin_hash            TEXT,       -- optional 4-digit PIN (admin-set) for login-free attendance marking
+  pin_failed_attempts INTEGER NOT NULL DEFAULT 0, -- locks after 5; admin reset required
+  active              INTEGER NOT NULL DEFAULT 1,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- ---------------------------------------------------------------------------

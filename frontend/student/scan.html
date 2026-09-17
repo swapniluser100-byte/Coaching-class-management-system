@@ -22,9 +22,18 @@
   <script src="js/common.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
-    requireStudentAuth();
-    renderStudentShell("scan.html", `
-      <h1>Scan Attendance QR</h1>
+    // This page works two ways:
+    //  - Logged in (has a student JWT): identity is already known, so it
+    //    marks attendance the same way it always has (POST /attendance/mark).
+    //  - Not logged in: no OTP/login required at all. After the QR is
+    //    scanned/opened, the student enters their phone number + a 4-digit
+    //    PIN (set once by admin) and that's used to identify them instead
+    //    (POST /attendance/mark-pin). Device-fingerprint binding, geo-fence
+    //    and one-mark-per-day still apply exactly as before either way.
+    const isLoggedIn = !!Api.getToken("student");
+
+    const pageInnerHtml = `
+      <h1>Mark Attendance</h1>
       <div id="alertBox"></div>
       <div id="scannerCard" class="card">
         <div id="videoWrap">
@@ -34,13 +43,34 @@
         <canvas id="canvas" class="hidden"></canvas>
         <p class="text-center text-muted mt-16" id="statusText">Point your camera at the QR code shown by your tutor.</p>
       </div>
+      <div id="pinFormCard" class="card hidden">
+        <h2>Who's marking attendance?</h2>
+        <label for="phoneInput">Phone Number</label>
+        <input type="tel" id="phoneInput" placeholder="9876543210" />
+        <label for="pinInput">4-digit PIN</label>
+        <input type="text" id="pinInput" inputmode="numeric" maxlength="4" placeholder="••••" />
+        <button class="btn btn-block mt-16" id="submitPinBtn">${iconSvg("check-circle")} Mark Attendance</button>
+      </div>
       <div id="resultCard" class="card hidden text-center">
         <div id="resultIcon" style="font-size:42px;"></div>
         <h2 id="resultTitle"></h2>
         <p id="resultMessage" class="text-muted"></p>
         <button class="btn btn-secondary mt-16" id="scanAgainBtn">${iconSvg("refresh-cw")} Scan Again</button>
       </div>
-    `);
+    `;
+
+    if (isLoggedIn) {
+      renderStudentShell("scan.html", pageInnerHtml);
+    } else {
+      document.body.innerHTML = `
+        <div class="container-narrow">
+          ${pageInnerHtml}
+          <p class="text-center text-muted mt-16" style="font-size:13px;">
+            <a href="index.html">Log in</a> to view attendance history and exam marks.
+          </p>
+        </div>
+      `;
+    }
 
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
@@ -50,6 +80,7 @@
     let stream = null;
     let scanning = false;
     let rafId = null;
+    let currentPayload = null;
 
     async function startCamera() {
       try {
@@ -105,6 +136,11 @@
       return null;
     }
 
+    function showPinForm() {
+      document.getElementById("scannerCard").classList.add("hidden");
+      document.getElementById("pinFormCard").classList.remove("hidden");
+    }
+
     async function onQrDecoded(raw) {
       scanning = false;
       const payload = extractPayload(raw);
@@ -115,8 +151,13 @@
         return;
       }
       stopCamera();
-      statusText.textContent = "Getting your location…";
-      await markAttendance(payload);
+      currentPayload = payload;
+      if (isLoggedIn) {
+        statusText.textContent = "Getting your location…";
+        await markAttendanceLoggedIn(payload);
+      } else {
+        showPinForm();
+      }
     }
 
     function getLocation() {
@@ -130,11 +171,10 @@
       });
     }
 
-    async function markAttendance(payload) {
+    async function markAttendanceLoggedIn(payload) {
       try {
         const coords = await getLocation();
         const deviceFingerprint = await getDeviceFingerprint();
-
         const data = await Api.request("student", "/attendance/mark", {
           method: "POST",
           body: {
@@ -152,16 +192,53 @@
       }
     }
 
+    async function markAttendanceWithPin(payload, phone, pin) {
+      try {
+        const coords = await getLocation();
+        const deviceFingerprint = await getDeviceFingerprint();
+        const data = await Api.request(null, "/attendance/mark-pin", {
+          method: "POST",
+          body: {
+            session_id: payload.session_id,
+            batch_id: payload.batch_id,
+            token: payload.token,
+            phone,
+            pin,
+            geo_lat: coords.latitude,
+            geo_long: coords.longitude,
+            device_fingerprint: deviceFingerprint,
+          },
+        });
+        showResult(true, "Attendance Marked!", `Marked present for ${data.date}.`);
+      } catch (err) {
+        showResult(false, "Could Not Mark Attendance", err.message);
+      }
+    }
+
     function showResult(success, title, message, icon) {
       document.getElementById("scannerCard").classList.add("hidden");
+      document.getElementById("pinFormCard").classList.add("hidden");
       document.getElementById("resultCard").classList.remove("hidden");
       document.getElementById("resultIcon").textContent = icon || (success ? "✅" : "⚠️");
       document.getElementById("resultTitle").textContent = title;
       document.getElementById("resultMessage").textContent = message;
     }
 
+    document.getElementById("submitPinBtn").addEventListener("click", async () => {
+      const phone = document.getElementById("phoneInput").value.trim();
+      const pin = document.getElementById("pinInput").value.trim();
+      const alertBox = document.getElementById("alertBox");
+      alertBox.innerHTML = "";
+      if (!phone) { showAlert(alertBox, "Enter your phone number."); return; }
+      if (!/^\d{4}$/.test(pin)) { showAlert(alertBox, "PIN must be exactly 4 digits."); return; }
+
+      showResult(true, "Marking Attendance…", "Please wait while we verify your location.", "⏳");
+      await markAttendanceWithPin(currentPayload, phone, pin);
+    });
+
     document.getElementById("scanAgainBtn").addEventListener("click", () => {
       document.getElementById("resultCard").classList.add("hidden");
+      document.getElementById("pinFormCard").classList.add("hidden");
       document.getElementById("scannerCard").classList.remove("hidden");
       statusText.textContent = "Point your camera at the QR code shown by your tutor.";
       startCamera();
@@ -171,7 +248,7 @@
     // as query params) so a phone's native camera app can open it directly —
     // scanning with the native camera otherwise just shows raw JSON text with
     // nothing to "open". If those params are present, skip the in-page camera
-    // scanner entirely and mark attendance straight away.
+    // scanner entirely.
     const deepLinkParams = new URLSearchParams(location.search);
     const deepLinkPayload = ["session_id", "batch_id", "token"].every((k) => deepLinkParams.get(k))
       ? {
@@ -182,8 +259,13 @@
       : null;
 
     if (deepLinkPayload) {
-      showResult(true, "Marking Attendance…", "Please wait while we verify your location.", "⏳");
-      markAttendance(deepLinkPayload);
+      currentPayload = deepLinkPayload;
+      if (isLoggedIn) {
+        showResult(true, "Marking Attendance…", "Please wait while we verify your location.", "⏳");
+        markAttendanceLoggedIn(deepLinkPayload);
+      } else {
+        showPinForm();
+      }
     } else {
       startCamera();
     }
