@@ -176,4 +176,180 @@ student.post("/exam/view", async (c) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Online exams: list, start/resume, autosave answers, submit (auto-grades
+// and writes the score into exam_marks so it shows up everywhere marks do).
+// ---------------------------------------------------------------------------
+
+function normalizeOptions(s: string | null | undefined): string {
+  return (s || "").split(",").map((x) => x.trim()).filter(Boolean).sort().join(",");
+}
+
+async function finalizeAttempt(db: D1Database, attemptId: string) {
+  const attempt = await db.prepare("SELECT * FROM exam_attempts WHERE id = ?").bind(attemptId)
+    .first<{ id: string; exam_id: string; student_id: string; status: string; score: number | null }>();
+  if (!attempt || attempt.status === "submitted") return attempt;
+
+  const exam = await db.prepare("SELECT template_id FROM exams WHERE id = ?")
+    .bind(attempt.exam_id).first<{ template_id: string }>();
+  const { results: questions } = await db.prepare(
+    "SELECT id, correct_options, marks FROM exam_questions WHERE template_id = ?"
+  ).bind(exam!.template_id).all<{ id: string; correct_options: string; marks: number }>();
+  const { results: answers } = await db.prepare(
+    "SELECT question_id, selected_options FROM exam_answers WHERE attempt_id = ?"
+  ).bind(attemptId).all<{ question_id: string; selected_options: string | null }>();
+
+  const answerByQuestion: Record<string, string | null> = {};
+  answers.forEach((a) => { answerByQuestion[a.question_id] = a.selected_options; });
+
+  let score = 0;
+  for (const q of questions) {
+    if (normalizeOptions(q.correct_options) === normalizeOptions(answerByQuestion[q.id])) score += q.marks;
+  }
+
+  await db.prepare(
+    "UPDATE exam_attempts SET status = 'submitted', submitted_at = datetime('now'), score = ? WHERE id = ?"
+  ).bind(score, attemptId).run();
+
+  await db.prepare(
+    `INSERT INTO exam_marks (id, exam_id, student_id, marks_obtained, remarks)
+     VALUES (?, ?, ?, ?, 'Auto-graded online exam')
+     ON CONFLICT (exam_id, student_id) DO UPDATE SET marks_obtained = excluded.marks_obtained, remarks = excluded.remarks`
+  ).bind(newId("mark"), attempt.exam_id, attempt.student_id, score).run();
+
+  return { ...attempt, status: "submitted", score };
+}
+
+student.get("/exams/online", async (c) => {
+  const studentId = c.get("jwtPayload").sub;
+  const { results } = await c.env.DB.prepare(
+    `SELECT e.id, e.exam_name, e.exam_date, e.total_marks, e.starts_at, e.ends_at, e.duration_minutes,
+       b.name as batch_name,
+       a.id as attempt_id, a.status as attempt_status, a.score as attempt_score
+     FROM exams e
+     JOIN batch_students bs ON bs.batch_id = e.batch_id
+     JOIN batches b ON b.id = e.batch_id
+     LEFT JOIN exam_attempts a ON a.exam_id = e.id AND a.student_id = bs.student_id
+     WHERE e.exam_type = 'online' AND bs.student_id = ?
+     ORDER BY e.starts_at DESC`
+  ).bind(studentId).all<Record<string, unknown>>();
+
+  const now = Date.now();
+  const withStatus = results.map((r) => {
+    let windowStatus = "upcoming";
+    if (r.ends_at && now > new Date(r.ends_at as string).getTime()) windowStatus = "closed";
+    else if (r.starts_at && now >= new Date(r.starts_at as string).getTime()) windowStatus = "active";
+    return { ...r, window_status: windowStatus };
+  });
+
+  return ok(c, withStatus);
+});
+
+student.post("/exam/:exam_id/start", async (c) => {
+  const studentId = c.get("jwtPayload").sub;
+  const examId = c.req.param("exam_id");
+
+  const exam = await c.env.DB.prepare("SELECT * FROM exams WHERE id = ? AND exam_type = 'online'").bind(examId)
+    .first<{ id: string; batch_id: string; template_id: string; starts_at: string; ends_at: string; duration_minutes: number; total_marks: number; exam_name: string }>();
+  if (!exam) return fail(c, "Online exam not found", 404);
+
+  const membership = await c.env.DB.prepare("SELECT 1 FROM batch_students WHERE batch_id = ? AND student_id = ?")
+    .bind(exam.batch_id, studentId).first();
+  if (!membership) return fail(c, "This exam is not available for your batch", 403);
+
+  const now = Date.now();
+  if (now < new Date(exam.starts_at).getTime()) return fail(c, "This exam hasn't started yet", 403);
+  if (now > new Date(exam.ends_at).getTime()) return fail(c, "This exam's window has closed", 403);
+
+  let attempt = await c.env.DB.prepare("SELECT * FROM exam_attempts WHERE exam_id = ? AND student_id = ?")
+    .bind(examId, studentId).first<{ id: string; status: string; deadline_at: string }>();
+
+  if (attempt?.status === "submitted") return fail(c, "You have already submitted this exam", 409);
+
+  if (!attempt) {
+    const deadlineMs = Math.min(now + exam.duration_minutes * 60 * 1000, new Date(exam.ends_at).getTime());
+    const id = newId("attempt");
+    const deadlineIso = new Date(deadlineMs).toISOString();
+    await c.env.DB.prepare(
+      `INSERT INTO exam_attempts (id, exam_id, student_id, started_at, deadline_at, status)
+       VALUES (?, ?, ?, datetime('now'), ?, 'in_progress')`
+    ).bind(id, examId, studentId, deadlineIso).run();
+    attempt = { id, status: "in_progress", deadline_at: deadlineIso };
+  } else if (now > new Date(attempt.deadline_at).getTime()) {
+    await finalizeAttempt(c.env.DB, attempt.id);
+    return fail(c, "Your time for this exam ran out and it was submitted automatically.", 410);
+  }
+
+  const { results: questions } = await c.env.DB.prepare(
+    "SELECT id, question_text, question_type, option_a, option_b, option_c, option_d, marks FROM exam_questions WHERE template_id = ? ORDER BY order_index, id"
+  ).bind(exam.template_id).all();
+
+  const { results: existingAnswers } = await c.env.DB.prepare(
+    "SELECT question_id, selected_options FROM exam_answers WHERE attempt_id = ?"
+  ).bind(attempt.id).all();
+
+  return ok(c, {
+    attempt_id: attempt.id,
+    exam_name: exam.exam_name,
+    total_marks: exam.total_marks,
+    deadline_at: attempt.deadline_at,
+    questions,
+    answers: existingAnswers,
+  });
+});
+
+student.post("/exam/attempt/:attempt_id/answer", async (c) => {
+  const studentId = c.get("jwtPayload").sub;
+  const attemptId = c.req.param("attempt_id");
+  const { question_id, selected_options } = await c.req.json<{ question_id: string; selected_options: string[] }>();
+  if (!question_id) return fail(c, "question_id is required", 400);
+
+  const attempt = await c.env.DB.prepare("SELECT * FROM exam_attempts WHERE id = ? AND student_id = ?")
+    .bind(attemptId, studentId).first<{ id: string; status: string; deadline_at: string }>();
+  if (!attempt) return fail(c, "Attempt not found", 404);
+  if (attempt.status === "submitted") return fail(c, "This exam has already been submitted", 409);
+  if (Date.now() > new Date(attempt.deadline_at).getTime()) {
+    await finalizeAttempt(c.env.DB, attemptId);
+    return fail(c, "Your time for this exam ran out", 410);
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO exam_answers (id, attempt_id, question_id, selected_options)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (attempt_id, question_id) DO UPDATE SET selected_options = excluded.selected_options`
+  ).bind(newId("ans"), attemptId, question_id, (selected_options || []).join(",")).run();
+
+  return ok(c, { saved: true });
+});
+
+student.post("/exam/attempt/:attempt_id/submit", async (c) => {
+  const studentId = c.get("jwtPayload").sub;
+  const attemptId = c.req.param("attempt_id");
+
+  const attempt = await c.env.DB.prepare("SELECT * FROM exam_attempts WHERE id = ? AND student_id = ?")
+    .bind(attemptId, studentId).first<{ id: string; exam_id: string }>();
+  if (!attempt) return fail(c, "Attempt not found", 404);
+
+  const finalized = await finalizeAttempt(c.env.DB, attemptId);
+  const exam = await c.env.DB.prepare("SELECT total_marks, template_id FROM exams WHERE id = ?")
+    .bind(attempt.exam_id).first<{ total_marks: number; template_id: string }>();
+
+  const { results: questions } = await c.env.DB.prepare(
+    "SELECT id, question_text, option_a, option_b, option_c, option_d, correct_options, marks FROM exam_questions WHERE template_id = ? ORDER BY order_index, id"
+  ).bind(exam!.template_id).all<Record<string, unknown>>();
+  const { results: answers } = await c.env.DB.prepare(
+    "SELECT question_id, selected_options FROM exam_answers WHERE attempt_id = ?"
+  ).bind(attemptId).all<{ question_id: string; selected_options: string | null }>();
+  const answerByQuestion: Record<string, string | null> = {};
+  answers.forEach((a) => { answerByQuestion[a.question_id] = a.selected_options; });
+
+  const review = questions.map((q) => ({ ...q, your_answer: answerByQuestion[q.id as string] || "" }));
+
+  return ok(c, {
+    score: (finalized as { score: number | null } | undefined)?.score ?? null,
+    total_marks: exam?.total_marks,
+    review,
+  });
+});
+
 export default student;

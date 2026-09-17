@@ -319,12 +319,119 @@ admin.post("/tutor/delete", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Exam Templates (online exam question banks) — created once, then scheduled
+// for any number of batches via /admin/exam/create with a template_id.
+// ---------------------------------------------------------------------------
+admin.post("/exam-template/create", async (c) => {
+  const { name, subject } = await c.req.json<{ name: string; subject?: string }>();
+  if (!name) return fail(c, "name is required", 400);
+
+  const id = newId("tmpl");
+  await c.env.DB.prepare("INSERT INTO exam_templates (id, name, subject) VALUES (?, ?, ?)")
+    .bind(id, name, subject || null).run();
+  return ok(c, { id }, 201);
+});
+
+admin.get("/exam-templates", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT t.id, t.name, t.subject, t.created_at,
+       (SELECT COUNT(*) FROM exam_questions q WHERE q.template_id = t.id) as question_count,
+       (SELECT COALESCE(SUM(marks), 0) FROM exam_questions q WHERE q.template_id = t.id) as total_marks,
+       (SELECT COUNT(*) FROM exams e WHERE e.template_id = t.id) as scheduled_count
+     FROM exam_templates t ORDER BY t.created_at DESC`
+  ).all();
+  return ok(c, results);
+});
+
+admin.get("/exam-template/:id", async (c) => {
+  const id = c.req.param("id");
+  const template = await c.env.DB.prepare("SELECT * FROM exam_templates WHERE id = ?").bind(id).first();
+  if (!template) return fail(c, "Template not found", 404);
+
+  const { results: questions } = await c.env.DB.prepare(
+    "SELECT * FROM exam_questions WHERE template_id = ? ORDER BY order_index, id"
+  ).bind(id).all();
+
+  return ok(c, { template, questions });
+});
+
+// Bulk-replaces every question in a template (same "edit the whole list, save
+// once" pattern as marks upload) — simplest way to build/edit a question bank.
+admin.post("/exam-template/:id/questions", async (c) => {
+  const templateId = c.req.param("id");
+  const template = await c.env.DB.prepare("SELECT id FROM exam_templates WHERE id = ?").bind(templateId).first();
+  if (!template) return fail(c, "Template not found", 404);
+
+  const { questions } = await c.req.json<{
+    questions: {
+      question_text: string;
+      question_type?: "single" | "multi";
+      option_a: string; option_b: string; option_c?: string; option_d?: string;
+      correct_options: string[];
+      marks?: number;
+    }[];
+  }>();
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return fail(c, "At least one question is required", 400);
+  }
+  for (const q of questions) {
+    if (!q.question_text || !q.option_a || !q.option_b || !q.correct_options?.length) {
+      return fail(c, "Each question needs question_text, option_a, option_b and at least one correct option", 400);
+    }
+    if ((q.question_type || "single") === "single" && q.correct_options.length !== 1) {
+      return fail(c, `"${q.question_text}" is a single-answer question but has ${q.correct_options.length} correct options marked`, 400);
+    }
+  }
+
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM exam_questions WHERE template_id = ?").bind(templateId),
+    ...questions.map((q, i) =>
+      c.env.DB.prepare(
+        `INSERT INTO exam_questions
+           (id, template_id, question_text, question_type, option_a, option_b, option_c, option_d, correct_options, marks, order_index)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        newId("q"), templateId, q.question_text, q.question_type || "single",
+        q.option_a, q.option_b, q.option_c || null, q.option_d || null,
+        q.correct_options.join(","), q.marks || 1, i
+      )
+    ),
+  ]);
+
+  return ok(c, { template_id: templateId, count: questions.length });
+});
+
+// ---------------------------------------------------------------------------
 // Exams & Marks
 // ---------------------------------------------------------------------------
 admin.post("/exam/create", async (c) => {
-  const b = await c.req.json<{ batch_id: string; exam_name: string; exam_date: string; total_marks: number }>();
-  if (!b.batch_id || !b.exam_name || !b.exam_date || !b.total_marks) {
-    return fail(c, "batch_id, exam_name, exam_date and total_marks are required", 400);
+  const b = await c.req.json<{
+    batch_id: string; exam_name: string; exam_date: string; total_marks?: number;
+    exam_type?: "classroom" | "online";
+    template_id?: string; starts_at?: string; ends_at?: string; duration_minutes?: number;
+  }>();
+  if (!b.batch_id || !b.exam_name || !b.exam_date) {
+    return fail(c, "batch_id, exam_name and exam_date are required", 400);
+  }
+
+  const examType = b.exam_type === "online" ? "online" : "classroom";
+  let totalMarks = b.total_marks;
+
+  if (examType === "online") {
+    if (!b.template_id) return fail(c, "template_id is required for an online exam", 400);
+    if (!b.starts_at || !b.ends_at || !b.duration_minutes) {
+      return fail(c, "starts_at, ends_at and duration_minutes are required for an online exam", 400);
+    }
+    const template = await c.env.DB.prepare("SELECT id FROM exam_templates WHERE id = ?").bind(b.template_id).first();
+    if (!template) return fail(c, "Template not found", 404);
+    if (!totalMarks) {
+      const sum = await c.env.DB.prepare("SELECT COALESCE(SUM(marks), 0) as total FROM exam_questions WHERE template_id = ?")
+        .bind(b.template_id).first<{ total: number }>();
+      totalMarks = sum?.total || 0;
+      if (!totalMarks) return fail(c, "This template has no questions yet — add questions before scheduling it", 400);
+    }
+  } else if (!totalMarks) {
+    return fail(c, "total_marks is required for a classroom exam", 400);
   }
 
   const id = newId("exam");
@@ -337,8 +444,15 @@ admin.post("/exam/create", async (c) => {
   }
 
   await c.env.DB.prepare(
-    "INSERT INTO exams (id, batch_id, exam_name, exam_date, total_marks, exam_code) VALUES (?, ?, ?, ?, ?, ?)"
-  ).bind(id, b.batch_id, b.exam_name, b.exam_date, b.total_marks, examCode).run();
+    `INSERT INTO exams (id, batch_id, exam_name, exam_date, total_marks, exam_code, exam_type, template_id, starts_at, ends_at, duration_minutes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    id, b.batch_id, b.exam_name, b.exam_date, totalMarks, examCode, examType,
+    examType === "online" ? b.template_id : null,
+    examType === "online" ? b.starts_at : null,
+    examType === "online" ? b.ends_at : null,
+    examType === "online" ? b.duration_minutes : null
+  ).run();
 
   return ok(c, { id, exam_code: examCode }, 201);
 });

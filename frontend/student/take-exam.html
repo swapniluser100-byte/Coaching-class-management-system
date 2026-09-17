@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Take Exam · Student</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+<style>
+  .timer-bar {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 10px; border-radius: 10px; background: var(--color-primary); color: #fff;
+    font-weight: 700; margin-bottom: 16px;
+  }
+  .timer-bar.low { background: var(--color-danger); }
+  .timer-bar svg { width: 18px; height: 18px; }
+  .q-option { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+  .q-option input { width: 18px; height: 18px; flex-shrink: 0; }
+  .q-option.correct { border-color: var(--color-success); background: var(--color-success-bg); }
+  .q-option.incorrect { border-color: var(--color-danger); background: var(--color-danger-bg); }
+</style>
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireStudentAuth();
+    renderStudentShell("online-exams.html", `
+      <div id="alertBox"></div>
+      <div id="loadingText" class="text-muted">Loading exam…</div>
+      <div id="examCard" class="hidden">
+        <div class="timer-bar" id="timerBar">${iconSvg("clock")} <span id="timerText">--:--</span> remaining</div>
+        <h1 id="examTitle"></h1>
+        <div id="questionsList"></div>
+        <button class="btn btn-block mt-16" id="submitBtn">${iconSvg("check-circle")} Submit Exam</button>
+      </div>
+      <div id="resultCard" class="hidden">
+        <div class="card text-center">
+          <h1 id="scoreHeading"></h1>
+          <p class="text-muted">Here's how you did, question by question.</p>
+        </div>
+        <div id="reviewList"></div>
+        <a class="btn btn-secondary btn-block mt-16" href="online-exams.html">Back to Online Exams</a>
+      </div>
+    `);
+
+    const params = new URLSearchParams(location.search);
+    const examId = params.get("exam_id");
+    const isReview = params.get("review") === "1";
+    const reviewAttemptId = params.get("attempt_id");
+
+    let attemptId = null;
+    let questions = [];
+    let deadlineAt = null;
+    let timerInterval = null;
+    let autoSubmitted = false;
+
+    const OPTION_LETTERS = ["A", "B", "C", "D"];
+
+    function optionLabel(q, letter) {
+      return q[`option_${letter.toLowerCase()}`];
+    }
+
+    function renderQuestions(qs, existingAnswers) {
+      const answerByQ = {};
+      (existingAnswers || []).forEach((a) => { answerByQ[a.question_id] = (a.selected_options || "").split(",").filter(Boolean); });
+
+      document.getElementById("questionsList").innerHTML = qs.map((q, qi) => {
+        const inputType = q.question_type === "multi" ? "checkbox" : "radio";
+        const selected = answerByQ[q.id] || [];
+        const options = OPTION_LETTERS.filter((l) => optionLabel(q, l)).map((l) => `
+          <label class="q-option">
+            <input type="${inputType}" name="q_${q.id}" data-question="${q.id}" data-letter="${l}" ${selected.includes(l) ? "checked" : ""} />
+            <span>${escapeHtml(optionLabel(q, l))}</span>
+          </label>
+        `).join("");
+        return `
+          <div class="card">
+            <p class="text-muted mb-0" style="font-size:12px;">Question ${qi + 1} of ${qs.length} · ${q.marks} mark(s) · ${q.question_type === "multi" ? "Select all that apply" : "Select one"}</p>
+            <h3>${escapeHtml(q.question_text)}</h3>
+            ${options}
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function saveAnswer(questionId) {
+      const q = questions.find((x) => x.id === questionId);
+      const inputs = [...document.querySelectorAll(`input[data-question="${questionId}"]:checked`)];
+      const selected_options = inputs.map((i) => i.dataset.letter);
+      try {
+        await Api.request("student", `/student/exam/attempt/${attemptId}/answer`, {
+          method: "POST",
+          body: { question_id: questionId, selected_options },
+        });
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    }
+
+    document.addEventListener("change", (e) => {
+      if (e.target.dataset && e.target.dataset.question) saveAnswer(e.target.dataset.question);
+    });
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        const msLeft = new Date(deadlineAt).getTime() - Date.now();
+        if (msLeft <= 0) {
+          document.getElementById("timerText").textContent = "0:00";
+          clearInterval(timerInterval);
+          if (!autoSubmitted) { autoSubmitted = true; submitExam(true); }
+          return;
+        }
+        const totalSec = Math.floor(msLeft / 1000);
+        const mm = Math.floor(totalSec / 60);
+        const ss = totalSec % 60;
+        document.getElementById("timerText").textContent = `${mm}:${String(ss).padStart(2, "0")}`;
+        document.getElementById("timerBar").classList.toggle("low", totalSec <= 60);
+      }, 1000);
+    }
+
+    function renderReview(score, totalMarks, review) {
+      document.getElementById("examCard").classList.add("hidden");
+      document.getElementById("resultCard").classList.remove("hidden");
+      document.getElementById("scoreHeading").textContent = `${score} / ${totalMarks}`;
+
+      document.getElementById("reviewList").innerHTML = review.map((q, qi) => {
+        const correctSet = (q.correct_options || "").split(",");
+        const yourSet = (q.your_answer || "").split(",").filter(Boolean);
+        const gotFullMarks = correctSet.slice().sort().join(",") === yourSet.slice().sort().join(",");
+        const options = OPTION_LETTERS.filter((l) => optionLabel(q, l)).map((l) => {
+          const isCorrect = correctSet.includes(l);
+          const wasSelected = yourSet.includes(l);
+          let cls = "";
+          if (isCorrect) cls = "correct";
+          else if (wasSelected) cls = "incorrect";
+          return `<div class="q-option ${cls}">${wasSelected ? "☑" : "☐"} ${escapeHtml(optionLabel(q, l))}${isCorrect ? " ✓" : ""}</div>`;
+        }).join("");
+        return `
+          <div class="card">
+            <div class="flex-between">
+              <p class="text-muted mb-0" style="font-size:12px;">Question ${qi + 1} · ${q.marks} mark(s)</p>
+              ${gotFullMarks ? `<span class="badge badge-success">+${q.marks}</span>` : `<span class="badge badge-danger">+0</span>`}
+            </div>
+            <h3>${escapeHtml(q.question_text)}</h3>
+            ${options}
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function submitExam(silent) {
+      if (!silent && !confirm("Submit the exam? You won't be able to change your answers after this.")) return;
+      try {
+        const data = await Api.request("student", `/student/exam/attempt/${attemptId}/submit`, { method: "POST" });
+        clearInterval(timerInterval);
+        renderReview(data.score, data.total_marks, data.review);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", () => submitExam(false));
+
+    (async () => {
+      try {
+        if (isReview && reviewAttemptId) {
+          document.getElementById("loadingText").classList.add("hidden");
+          const data = await Api.request("student", `/student/exam/attempt/${reviewAttemptId}/submit`, { method: "POST" });
+          document.getElementById("examCard").classList.add("hidden");
+          renderReview(data.score, data.total_marks, data.review);
+          return;
+        }
+
+        if (!examId) throw new Error("No exam specified.");
+        const data = await Api.request("student", `/student/exam/${examId}/start`, { method: "POST" });
+        attemptId = data.attempt_id;
+        questions = data.questions;
+        deadlineAt = data.deadline_at;
+
+        document.getElementById("loadingText").classList.add("hidden");
+        document.getElementById("examCard").classList.remove("hidden");
+        document.getElementById("examTitle").textContent = data.exam_name;
+        renderQuestions(questions, data.answers);
+        startTimer();
+      } catch (err) {
+        document.getElementById("loadingText").classList.add("hidden");
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

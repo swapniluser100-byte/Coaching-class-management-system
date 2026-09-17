@@ -2,6 +2,7 @@ const STUDENT_NAV = [
   { href: "dashboard.html", label: "Home" },
   { href: "scan.html", label: "Scan QR" },
   { href: "history.html", label: "History" },
+  { href: "online-exams.html", label: "Online Exams" },
   { href: "exam.html", label: "Exam Marks" },
 ];
 

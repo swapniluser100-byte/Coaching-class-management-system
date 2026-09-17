@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Question Banks · Tuition Admin</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+<style>
+  .question-row { border: 1px dashed var(--color-border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .option-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .option-row input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
+  .option-row input[type="text"] { flex: 1; }
+</style>
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireAdminAuth();
+    renderAdminShell("question-banks.html", `
+      <div id="alertBox"></div>
+
+      <div class="card">
+        <h2>Create Question Bank</h2>
+        <p class="text-muted" style="font-size:13px;">A question bank is a reusable master exam — build it once, then schedule it for any number of batches from Exam Management without re-entering questions.</p>
+        <div class="field-row">
+          <div>
+            <label>Name</label>
+            <input id="newTmplName" placeholder="e.g. Physics Unit Test 1" />
+          </div>
+          <div>
+            <label>Subject (optional)</label>
+            <input id="newTmplSubject" placeholder="e.g. Physics" />
+          </div>
+        </div>
+        <button class="btn mt-16" id="createTmplBtn">${iconSvg("plus")} Create Question Bank</button>
+      </div>
+
+      <div class="card">
+        <h2>Question Banks</h2>
+        <div class="table-wrap mt-16">
+          <table>
+            <thead><tr><th>Name</th><th>Subject</th><th>Questions</th><th>Total Marks</th><th>Scheduled</th><th></th></tr></thead>
+            <tbody id="tmplBody"><tr><td colspan="6" class="text-muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card hidden" id="builderCard">
+        <div class="flex-between">
+          <h2 class="mb-0" id="builderHeading"></h2>
+          <button class="btn" id="saveQuestionsBtn">${iconSvg("edit")} Save All Questions</button>
+        </div>
+        <div id="questionsContainer" class="mt-16"></div>
+        <button class="btn btn-secondary btn-block" id="addQuestionBtn">${iconSvg("plus")} Add Question</button>
+      </div>
+    `);
+    setPageTitle("Question Banks");
+
+    let templates = [];
+    let currentTemplateId = null;
+    let questionCount = 0;
+
+    async function loadTemplates() {
+      templates = await Api.request("admin", "/admin/exam-templates");
+      const tbody = document.getElementById("tmplBody");
+      if (templates.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-muted">No question banks yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = templates.map((t) => `
+        <tr>
+          <td>${escapeHtml(t.name)}</td>
+          <td>${escapeHtml(t.subject || "-")}</td>
+          <td>${t.question_count}</td>
+          <td>${t.total_marks}</td>
+          <td>${t.scheduled_count > 0 ? `<span class="badge badge-success">${t.scheduled_count}×</span>` : `<span class="badge badge-muted">Not yet</span>`}</td>
+          <td>${iconButton({ icon: "edit", title: "Edit Questions", onclick: `openBuilder('${t.id}')` })}</td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("createTmplBtn").addEventListener("click", async () => {
+      const name = document.getElementById("newTmplName").value.trim();
+      const subject = document.getElementById("newTmplSubject").value.trim();
+      if (!name) { showAlert(document.getElementById("alertBox"), "Name is required."); return; }
+      try {
+        const data = await Api.request("admin", "/admin/exam-template/create", { method: "POST", body: { name, subject: subject || undefined } });
+        document.getElementById("newTmplName").value = "";
+        document.getElementById("newTmplSubject").value = "";
+        await loadTemplates();
+        window.openBuilder(data.id);
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    });
+
+    function optionRow(letter, value, checked, required) {
+      return `
+        <div class="option-row">
+          <input type="checkbox" class="qCorrect" data-letter="${letter}" ${checked ? "checked" : ""} />
+          <input type="text" class="qOpt${letter}" placeholder="Option ${letter}${required ? "" : " (optional)"}" value="${escapeHtml(value || "")}" />
+        </div>`;
+    }
+
+    function questionRowHtml(q, index) {
+      const correct = (q?.correct_options || "").split(",");
+      return `
+        <div class="question-row" data-question data-index="${index}">
+          <div class="flex-between">
+            <strong>Question ${index + 1}</strong>
+            ${iconButton({ icon: "trash", title: "Remove", onclick: `removeQuestion(${index})`, variant: "danger" })}
+          </div>
+          <label>Question Text</label>
+          <input type="text" class="qText" value="${escapeHtml(q?.question_text || "")}" />
+          <div class="field-row">
+            <div>
+              <label>Type</label>
+              <select class="qType">
+                <option value="single" ${(!q || q.question_type === "single") ? "selected" : ""}>Single answer</option>
+                <option value="multi" ${q?.question_type === "multi" ? "selected" : ""}>Multiple answers</option>
+              </select>
+            </div>
+            <div>
+              <label>Marks</label>
+              <input type="number" class="qMarks" min="1" value="${q?.marks ?? 1}" />
+            </div>
+          </div>
+          <label>Options (tick the correct answer${q?.question_type === "multi" ? "s" : ""})</label>
+          ${optionRow("A", q?.option_a, correct.includes("A"), true)}
+          ${optionRow("B", q?.option_b, correct.includes("B"), true)}
+          ${optionRow("C", q?.option_c, correct.includes("C"), false)}
+          ${optionRow("D", q?.option_d, correct.includes("D"), false)}
+        </div>`;
+    }
+
+    window.openBuilder = async (templateId) => {
+      currentTemplateId = templateId;
+      const template = templates.find((t) => t.id === templateId);
+      document.getElementById("builderCard").classList.remove("hidden");
+      document.getElementById("builderHeading").textContent = `Questions — ${template ? template.name : ""}`;
+
+      const data = await Api.request("admin", `/admin/exam-template/${templateId}`);
+      const container = document.getElementById("questionsContainer");
+      if (data.questions.length === 0) {
+        container.innerHTML = questionRowHtml(null, 0);
+        questionCount = 1;
+      } else {
+        container.innerHTML = data.questions.map((q, i) => questionRowHtml(q, i)).join("");
+        questionCount = data.questions.length;
+      }
+      document.getElementById("builderCard").scrollIntoView({ behavior: "smooth" });
+    };
+
+    document.getElementById("addQuestionBtn").addEventListener("click", () => {
+      document.getElementById("questionsContainer").insertAdjacentHTML("beforeend", questionRowHtml(null, questionCount));
+      questionCount++;
+    });
+
+    window.removeQuestion = (index) => {
+      const row = document.querySelector(`.question-row[data-index="${index}"]`);
+      if (row) row.remove();
+    };
+
+    // Enforce radio-button behaviour for "single answer" questions.
+    document.getElementById("questionsContainer").addEventListener("change", (e) => {
+      const row = e.target.closest(".question-row");
+      if (!row) return;
+      if (e.target.classList.contains("qCorrect") || e.target.classList.contains("qType")) {
+        const type = row.querySelector(".qType").value;
+        if (type === "single") {
+          const checked = [...row.querySelectorAll(".qCorrect:checked")];
+          if (e.target.classList.contains("qCorrect") && e.target.checked) {
+            checked.forEach((cb) => { if (cb !== e.target) cb.checked = false; });
+          } else if (checked.length > 1) {
+            checked.slice(1).forEach((cb) => { cb.checked = false; });
+          }
+        }
+      }
+    });
+
+    document.getElementById("saveQuestionsBtn").addEventListener("click", async () => {
+      const alertBox = document.getElementById("alertBox");
+      const rows = [...document.querySelectorAll(".question-row")];
+      if (rows.length === 0) { showAlert(alertBox, "Add at least one question."); return; }
+
+      const questions = [];
+      for (const row of rows) {
+        const question_text = row.querySelector(".qText").value.trim();
+        const question_type = row.querySelector(".qType").value;
+        const option_a = row.querySelector(".qOptA").value.trim();
+        const option_b = row.querySelector(".qOptB").value.trim();
+        const option_c = row.querySelector(".qOptC").value.trim();
+        const option_d = row.querySelector(".qOptD").value.trim();
+        const marks = parseInt(row.querySelector(".qMarks").value, 10) || 1;
+        const correct_options = [...row.querySelectorAll(".qCorrect:checked")].map((cb) => cb.dataset.letter);
+
+        if (!question_text || !option_a || !option_b) {
+          showAlert(alertBox, "Every question needs text, Option A and Option B filled in.");
+          return;
+        }
+        if (correct_options.length === 0) {
+          showAlert(alertBox, `"${question_text}" has no correct answer ticked.`);
+          return;
+        }
+        if (question_type === "single" && correct_options.length !== 1) {
+          showAlert(alertBox, `"${question_text}" is single-answer but has ${correct_options.length} options ticked.`);
+          return;
+        }
+        questions.push({ question_text, question_type, option_a, option_b, option_c: option_c || undefined, option_d: option_d || undefined, correct_options, marks });
+      }
+
+      try {
+        await Api.request("admin", `/admin/exam-template/${currentTemplateId}/questions`, { method: "POST", body: { questions } });
+        showAlert(alertBox, `Saved ${questions.length} question(s).`, "success");
+        await loadTemplates();
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
+
+    loadTemplates().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+  </script>
+</body>
+</html>

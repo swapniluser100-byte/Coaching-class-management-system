@@ -7,6 +7,7 @@ const ADMIN_NAV = [
   { href: "tutors.html", label: "Manage Tutors" },
   { href: "attendance.html", label: "Attendance Reports" },
   { href: "exams.html", label: "Exam Management" },
+  { href: "question-banks.html", label: "Question Banks" },
   { href: "marks.html", label: "Marks Upload" },
   { href: "settings.html", label: "Settings" },
 ];
@@ -92,6 +93,7 @@ const ICON_PATHS = {
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
   key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
 };
 
 function iconSvg(name) {

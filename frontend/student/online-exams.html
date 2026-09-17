@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Online Exams · Student</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireStudentAuth();
+    renderStudentShell("online-exams.html", `
+      <h1>Online Exams</h1>
+      <div id="alertBox"></div>
+      <div id="examsList"><p class="text-muted">Loading…</p></div>
+    `);
+
+    function statusBadge(exam) {
+      if (exam.attempt_status === "submitted") {
+        return `<span class="badge badge-success">Submitted · ${exam.attempt_score}/${exam.total_marks}</span>`;
+      }
+      if (exam.window_status === "upcoming") return `<span class="badge badge-muted">Opens ${new Date(exam.starts_at).toLocaleString()}</span>`;
+      if (exam.window_status === "closed") return `<span class="badge badge-danger">Window closed</span>`;
+      if (exam.attempt_status === "in_progress") return `<span class="badge badge-warning">In progress</span>`;
+      return `<span class="badge badge-success">Open now</span>`;
+    }
+
+    function actionButton(exam) {
+      if (exam.attempt_status === "submitted") {
+        return `<a class="btn btn-secondary btn-sm" href="take-exam.html?exam_id=${exam.id}&attempt_id=${exam.attempt_id}&review=1">${iconSvg("check-circle")} View Result</a>`;
+      }
+      if (exam.window_status === "active") {
+        return `<a class="btn btn-sm" href="take-exam.html?exam_id=${exam.id}">${iconSvg("play")} ${exam.attempt_status === "in_progress" ? "Resume Exam" : "Start Exam"}</a>`;
+      }
+      return "";
+    }
+
+    (async () => {
+      try {
+        const exams = await Api.request("student", "/student/exams/online");
+        const container = document.getElementById("examsList");
+        if (exams.length === 0) {
+          container.innerHTML = `<p class="text-muted">No online exams scheduled for your batches yet.</p>`;
+          return;
+        }
+        container.innerHTML = exams.map((e) => `
+          <div class="card">
+            <div class="flex-between" style="align-items:flex-start;">
+              <div>
+                <h3 class="mb-0">${escapeHtml(e.exam_name)}</h3>
+                <p class="text-muted" style="font-size:13px;">${escapeHtml(e.batch_name)} · Total marks: ${e.total_marks}</p>
+                <p class="text-muted" style="font-size:12px;">
+                  ${iconSvg("clock")} ${new Date(e.starts_at).toLocaleString()} → ${new Date(e.ends_at).toLocaleString()}
+                  (${e.duration_minutes} min once started)
+                </p>
+              </div>
+              <div class="text-center" style="flex-shrink:0;">
+                ${statusBadge(e)}
+                <div class="mt-8">${actionButton(e)}</div>
+              </div>
+            </div>
+          </div>
+        `).join("");
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

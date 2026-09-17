@@ -128,16 +128,84 @@ CREATE INDEX IF NOT EXISTS idx_attendance_batch_date ON attendance(batch_id, dat
 CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
 
 -- ---------------------------------------------------------------------------
+-- exam_templates — the reusable "master" question bank for online exams.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS exam_templates (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  subject    TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
+-- exam_questions — MCQ bank tied to a template. question_type 'single' means
+-- exactly one of correct_options is right (radio buttons); 'multi' means one
+-- or more (checkboxes) and the student must select exactly the correct set
+-- for the marks (no partial credit).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS exam_questions (
+  id              TEXT PRIMARY KEY,
+  template_id     TEXT NOT NULL REFERENCES exam_templates(id) ON DELETE CASCADE,
+  question_text   TEXT NOT NULL,
+  question_type   TEXT NOT NULL DEFAULT 'single', -- single | multi
+  option_a        TEXT NOT NULL,
+  option_b        TEXT NOT NULL,
+  option_c        TEXT,
+  option_d        TEXT,
+  correct_options TEXT NOT NULL, -- comma-separated option letters, e.g. "A" or "A,C"
+  marks           INTEGER NOT NULL DEFAULT 1,
+  order_index     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_exam_questions_template ON exam_questions(template_id);
+
+-- ---------------------------------------------------------------------------
 -- exams
+-- Each row is one scheduled sitting of an exam for one batch (classroom or
+-- online). For online exams, template_id points at the reusable question
+-- bank above — the same template can be scheduled again for other batches
+-- by creating another exams row with the same template_id, without
+-- duplicating any questions.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS exams (
+  id                TEXT PRIMARY KEY,
+  batch_id          TEXT NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
+  exam_name         TEXT NOT NULL,
+  exam_date         TEXT NOT NULL,
+  total_marks       INTEGER NOT NULL,
+  exam_code         TEXT UNIQUE NOT NULL,
+  exam_type         TEXT NOT NULL DEFAULT 'classroom', -- classroom | online
+  template_id       TEXT REFERENCES exam_templates(id) ON DELETE SET NULL, -- online only
+  starts_at         TEXT,    -- online only: ISO datetime the exam window opens
+  ends_at           TEXT,    -- online only: ISO datetime the exam window closes
+  duration_minutes  INTEGER, -- online only: per-student time limit once they start
+  created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
+-- exam_attempts — one student's timed attempt at one scheduled online exam.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS exam_attempts (
   id           TEXT PRIMARY KEY,
-  batch_id     TEXT NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
-  exam_name    TEXT NOT NULL,
-  exam_date    TEXT NOT NULL,
-  total_marks  INTEGER NOT NULL,
-  exam_code    TEXT UNIQUE NOT NULL,
-  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  exam_id      TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  student_id   TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  started_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  deadline_at  TEXT NOT NULL, -- min(started_at + duration_minutes, exam.ends_at)
+  submitted_at TEXT,
+  status       TEXT NOT NULL DEFAULT 'in_progress', -- in_progress | submitted
+  score        INTEGER,
+  UNIQUE (exam_id, student_id)
+);
+
+-- ---------------------------------------------------------------------------
+-- exam_answers — a student's answer to one question within one attempt.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS exam_answers (
+  id               TEXT PRIMARY KEY,
+  attempt_id       TEXT NOT NULL REFERENCES exam_attempts(id) ON DELETE CASCADE,
+  question_id      TEXT NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
+  selected_options TEXT, -- comma-separated option letters, NULL = unanswered
+  UNIQUE (attempt_id, question_id)
 );
 
 -- ---------------------------------------------------------------------------

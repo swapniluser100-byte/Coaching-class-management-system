@@ -14,18 +14,41 @@
     requireAdminAuth();
     renderAdminShell("exams.html", `
       <div id="alertBox"></div>
-      <div class="grid" style="grid-template-columns: 340px 1fr;">
+      <div class="grid" style="grid-template-columns: 360px 1fr;">
         <div class="card">
-          <h2>Create Exam</h2>
+          <h2>Create / Schedule Exam</h2>
           <form id="examForm">
             <label>Batch</label>
             <select id="batchId" required></select>
+
+            <label>Exam Type</label>
+            <select id="examType">
+              <option value="classroom">Classroom (paper exam, marks uploaded by hand)</option>
+              <option value="online">Online (students attempt on this portal)</option>
+            </select>
+
             <label>Exam Name</label>
             <input id="examName" required placeholder="e.g. Unit Test 1" />
-            <label>Exam Date</label>
-            <input id="examDate" type="date" required />
-            <label>Total Marks</label>
-            <input id="totalMarks" type="number" required min="1" value="100" />
+
+            <div id="classroomFields">
+              <label>Exam Date</label>
+              <input id="examDate" type="date" />
+              <label>Total Marks</label>
+              <input id="totalMarks" type="number" min="1" value="100" />
+            </div>
+
+            <div id="onlineFields" class="hidden">
+              <label>Question Bank</label>
+              <select id="templateId"></select>
+              <p class="text-muted mt-8" style="font-size:12px;">Don't see the one you need? <a href="question-banks.html">Create or edit question banks</a>.</p>
+              <label>Opens At</label>
+              <input id="startsAt" type="datetime-local" />
+              <label>Closes At</label>
+              <input id="endsAt" type="datetime-local" />
+              <label>Time Limit Per Student (minutes)</label>
+              <input id="durationMinutes" type="number" min="1" value="30" />
+            </div>
+
             <button class="btn btn-block mt-16" type="submit">Create Exam & Generate Code</button>
           </form>
         </div>
@@ -37,8 +60,8 @@
           </div>
           <div class="table-wrap mt-16">
             <table>
-              <thead><tr><th>Exam</th><th>Batch</th><th>Date</th><th>Total Marks</th><th>Exam Code</th><th></th></tr></thead>
-              <tbody id="examsBody"><tr><td colspan="6" class="text-muted">Loading…</td></tr></tbody>
+              <thead><tr><th>Exam</th><th>Type</th><th>Batch</th><th>Date / Window</th><th>Total Marks</th><th>Exam Code</th><th></th></tr></thead>
+              <tbody id="examsBody"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -47,6 +70,7 @@
     setPageTitle("Exam Management");
 
     let allBatches = [];
+    let allTemplates = [];
 
     async function loadBatches() {
       allBatches = await Api.request("admin", "/admin/batches");
@@ -57,26 +81,44 @@
         allBatches.map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("");
     }
 
+    async function loadTemplates() {
+      allTemplates = await Api.request("admin", "/admin/exam-templates");
+      document.getElementById("templateId").innerHTML = allTemplates.length
+        ? allTemplates.map((t) => `<option value="${t.id}">${escapeHtml(t.name)} (${t.question_count} questions, ${t.total_marks} marks)</option>`).join("")
+        : `<option value="">— no question banks yet —</option>`;
+    }
+
+    document.getElementById("examType").addEventListener("change", (e) => {
+      const isOnline = e.target.value === "online";
+      document.getElementById("classroomFields").classList.toggle("hidden", isOnline);
+      document.getElementById("onlineFields").classList.toggle("hidden", !isOnline);
+      document.getElementById("examDate").required = !isOnline;
+      document.getElementById("totalMarks").required = !isOnline;
+    });
+
     async function loadExams() {
       const batchId = document.getElementById("filterBatch").value;
       const exams = await Api.request("admin", `/admin/exams${batchId ? "?batch_id=" + batchId : ""}`);
       const tbody = document.getElementById("examsBody");
       if (exams.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-muted">No exams yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-muted">No exams yet.</td></tr>`;
         return;
       }
       const batchName = (id) => allBatches.find((b) => b.id === id)?.name || "—";
       tbody.innerHTML = exams.map((e) => `
         <tr>
           <td>${escapeHtml(e.exam_name)}</td>
+          <td>${e.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`}</td>
           <td>${escapeHtml(batchName(e.batch_id))}</td>
-          <td>${e.exam_date}</td>
+          <td>${e.exam_type === "online"
+            ? `${new Date(e.starts_at).toLocaleString()} → ${new Date(e.ends_at).toLocaleString()}`
+            : e.exam_date}</td>
           <td>${e.total_marks}</td>
           <td class="flex gap-8" style="align-items:center;">
             <code style="font-weight:700; letter-spacing:0.05em;">${e.exam_code}</code>
             ${iconButton({ icon: "copy", title: "Copy Code", onclick: `copyCode('${e.exam_code}')` })}
           </td>
-          <td>${iconButton({ icon: "upload", title: "Upload Marks", href: `marks.html?exam_id=${e.id}` })}</td>
+          <td>${iconButton({ icon: "upload", title: "View / Upload Marks", href: `marks.html?exam_id=${e.id}` })}</td>
         </tr>
       `).join("");
     }
@@ -91,28 +133,46 @@
 
     document.getElementById("examForm").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const alertBox = document.getElementById("alertBox");
+      const isOnline = document.getElementById("examType").value === "online";
+
       try {
-        const data = await Api.request("admin", "/admin/exam/create", {
-          method: "POST",
-          body: {
-            batch_id: document.getElementById("batchId").value,
-            exam_name: document.getElementById("examName").value.trim(),
-            exam_date: document.getElementById("examDate").value,
-            total_marks: parseInt(document.getElementById("totalMarks").value, 10),
-          },
-        });
+        const body = {
+          batch_id: document.getElementById("batchId").value,
+          exam_name: document.getElementById("examName").value.trim(),
+          exam_type: isOnline ? "online" : "classroom",
+        };
+
+        if (isOnline) {
+          const templateId = document.getElementById("templateId").value;
+          const startsAt = document.getElementById("startsAt").value;
+          const endsAt = document.getElementById("endsAt").value;
+          if (!templateId) { showAlert(alertBox, "Create a question bank first (see Question Banks)."); return; }
+          if (!startsAt || !endsAt) { showAlert(alertBox, "Set both the opens-at and closes-at times."); return; }
+          body.template_id = templateId;
+          body.starts_at = new Date(startsAt).toISOString();
+          body.ends_at = new Date(endsAt).toISOString();
+          body.duration_minutes = parseInt(document.getElementById("durationMinutes").value, 10);
+          body.exam_date = startsAt.slice(0, 10);
+        } else {
+          body.exam_date = document.getElementById("examDate").value;
+          body.total_marks = parseInt(document.getElementById("totalMarks").value, 10);
+        }
+
+        const data = await Api.request("admin", "/admin/exam/create", { method: "POST", body });
         document.getElementById("examForm").reset();
         document.getElementById("totalMarks").value = 100;
-        showAlert(document.getElementById("alertBox"), `Exam created. Exam code: <strong>${data.exam_code}</strong>`, "success");
+        document.getElementById("durationMinutes").value = 30;
+        showAlert(alertBox, `Exam created. Exam code: <strong>${data.exam_code}</strong>`, "success");
         await loadExams();
       } catch (err) {
-        showAlert(document.getElementById("alertBox"), err.message);
+        showAlert(alertBox, err.message);
       }
     });
 
     (async () => {
       try {
-        await loadBatches();
+        await Promise.all([loadBatches(), loadTemplates()]);
         await loadExams();
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
