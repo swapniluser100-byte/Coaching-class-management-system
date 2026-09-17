@@ -138,6 +138,12 @@ p { margin: 0 0 8px; color: var(--color-text-muted); }
 .stat-tile { padding: 16px; }
 .stat-tile .value { font-size: 26px; font-weight: 700; }
 .stat-tile .label { font-size: 13px; color: var(--color-text-muted); }
+.stat-tile-present { background: var(--color-success-bg); border-color: var(--color-success); }
+.stat-tile-present .value { color: var(--color-success); }
+.stat-tile-absent { background: var(--color-danger-bg); border-color: var(--color-danger); }
+.stat-tile-absent .value { color: var(--color-danger); }
+
+.summary-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 
 /* ---- Forms ---- */
 label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 5px; }

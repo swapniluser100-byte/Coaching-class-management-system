@@ -37,11 +37,25 @@
       </div>
 
       <div class="card hidden" id="liveCard">
-        <div class="flex-between" style="flex-wrap:wrap; gap:8px;">
-          <h2 class="mb-0">Live Attendance</h2>
-          <span class="badge badge-success" id="presentCount">0 present</span>
+        <h2>Live Attendance</h2>
+        <div class="summary-tiles">
+          <div class="card stat-tile stat-tile-present" style="margin-bottom:0;">
+            <div class="value" id="presentCount">0</div>
+            <div class="label">Present</div>
+          </div>
+          <div class="card stat-tile stat-tile-absent" style="margin-bottom:0;">
+            <div class="value" id="absentCount">0</div>
+            <div class="label">Absent</div>
+          </div>
         </div>
-        <input id="studentSearch" placeholder="Search student by name or phone…" class="mt-16" />
+        <div class="flex gap-8 mt-16" style="flex-wrap:wrap;">
+          <input id="studentSearch" placeholder="Search student by name or phone…" style="flex:1; min-width:200px;" />
+          <select id="statusFilter" style="max-width:160px;">
+            <option value="all">All statuses</option>
+            <option value="present">Present only</option>
+            <option value="absent">Absent only</option>
+          </select>
+        </div>
         <p class="text-muted mt-8" style="font-size:12px;">No good phone to scan? Use "Mark Present" to mark them manually — it's flagged as a manual entry everywhere attendance is shown.</p>
         <div class="table-wrap mt-16">
           <table>
@@ -123,7 +137,8 @@
         const data = await Api.request("tutor", `/attendance/batch/${currentSession.batch_id}`);
         liveStudents = data.students;
         const present = data.students.filter((s) => s.status === "present");
-        document.getElementById("presentCount").textContent = `${present.length} / ${data.students.length} present`;
+        document.getElementById("presentCount").textContent = present.length;
+        document.getElementById("absentCount").textContent = data.students.length - present.length;
         renderLiveTable();
       } catch (err) {
         // non-fatal; keep polling
@@ -132,12 +147,16 @@
 
     function renderLiveTable() {
       const query = document.getElementById("studentSearch").value.trim().toLowerCase();
-      const filtered = query
+      const statusFilter = document.getElementById("statusFilter").value;
+
+      let filtered = query
         ? liveStudents.filter((s) => s.name.toLowerCase().includes(query) || (s.phone || "").includes(query))
         : liveStudents;
+      if (statusFilter === "present") filtered = filtered.filter((s) => s.status === "present");
+      else if (statusFilter === "absent") filtered = filtered.filter((s) => s.status !== "present");
 
       if (filtered.length === 0) {
-        document.getElementById("liveBody").innerHTML = `<tr><td colspan="4" class="text-muted">No students match "${escapeHtml(query)}".</td></tr>`;
+        document.getElementById("liveBody").innerHTML = `<tr><td colspan="4" class="text-muted">No students match the current search / filter.</td></tr>`;
         return;
       }
 
@@ -155,6 +174,7 @@
     }
 
     document.getElementById("studentSearch").addEventListener("input", renderLiveTable);
+    document.getElementById("statusFilter").addEventListener("change", renderLiveTable);
 
     window.markManual = async (studentId) => {
       if (!currentSession) return;
