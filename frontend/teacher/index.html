@@ -9,7 +9,7 @@
 <body>
   <div class="auth-wrap">
     <div class="auth-card card">
-      <div class="auth-logo">🧑‍🏫 Teacher Login</div>
+      <div class="auth-logo">🧑‍🏫 <span data-brand-name="Teacher">Teacher Login</span></div>
       <div id="alertBox"></div>
       <form id="loginForm">
         <label for="phone">Phone Number</label>
@@ -25,6 +25,7 @@
   </div>
 
   <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/branding.js"></script>
   <script src="../shared/js/api.js"></script>
   <script>
     document.getElementById("loginForm").addEventListener("submit", async (e) => {

@@ -236,3 +236,11 @@ CREATE TABLE IF NOT EXISTS otp_requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_requests(phone);
+
+-- ---------------------------------------------------------------------------
+-- settings - single-row-per-key app configuration (tuition name, brand color)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

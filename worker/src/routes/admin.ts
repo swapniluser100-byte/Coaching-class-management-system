@@ -638,4 +638,29 @@ admin.get("/analytics/overview", async (c) => {
   return ok(c, { batchStrength, attendancePct, topAbsentees });
 });
 
+// ---------------------------------------------------------------------------
+// General settings: tuition name + brand color shown across every portal.
+// ---------------------------------------------------------------------------
+admin.post("/settings/update", async (c) => {
+  const { tuition_name, brand_color } = await c.req.json<{ tuition_name?: string; brand_color?: string }>();
+
+  if (tuition_name !== undefined && !tuition_name.trim()) {
+    return fail(c, "Tuition name can't be empty", 400);
+  }
+  if (brand_color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(brand_color)) {
+    return fail(c, "Brand color must be a hex color like #3654e0", 400);
+  }
+
+  const updates: [string, string][] = [];
+  if (tuition_name !== undefined) updates.push(["tuition_name", tuition_name.trim()]);
+  if (brand_color !== undefined) updates.push(["brand_color", brand_color]);
+
+  for (const [key, value] of updates) {
+    await c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+      .bind(key, value).run();
+  }
+
+  return ok(c, { updated: updates.map(([key]) => key) });
+});
+
 export default admin;

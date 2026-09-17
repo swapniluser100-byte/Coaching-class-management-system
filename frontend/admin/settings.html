@@ -8,12 +8,25 @@
 </head>
 <body>
   <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/branding.js"></script>
   <script src="../shared/js/api.js"></script>
   <script src="js/common.js"></script>
   <script>
     requireAdminAuth();
     renderAdminShell("settings.html", `
       <div id="alertBox"></div>
+      <div class="card">
+        <h2>General</h2>
+        <p>Shown across every portal's login page, home page and branding.</p>
+        <label>Tuition / Class Name</label>
+        <input id="tuitionName" placeholder="e.g. Sharma's Classes" />
+        <label>Brand Color</label>
+        <div class="flex gap-8" style="align-items:center;">
+          <input id="brandColor" type="color" style="width:56px; height:38px; padding:2px; flex-shrink:0;" />
+          <input id="brandColorHex" placeholder="#3654e0" style="max-width:140px;" />
+        </div>
+        <button class="btn mt-16" id="saveGeneralBtn">Save</button>
+      </div>
       <div class="card">
         <h2>API Connection</h2>
         <p>The Worker API this portal talks to. Stored locally in this browser only.</p>
@@ -32,6 +45,40 @@
       </div>
     `);
     setPageTitle("Settings");
+
+    (async () => {
+      try {
+        const settings = await Api.request(null, "/public/settings");
+        document.getElementById("tuitionName").value = settings.tuition_name;
+        document.getElementById("brandColor").value = settings.brand_color;
+        document.getElementById("brandColorHex").value = settings.brand_color;
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+
+    document.getElementById("brandColor").addEventListener("input", (e) => {
+      document.getElementById("brandColorHex").value = e.target.value;
+    });
+    document.getElementById("brandColorHex").addEventListener("input", (e) => {
+      if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) document.getElementById("brandColor").value = e.target.value;
+    });
+
+    document.getElementById("saveGeneralBtn").addEventListener("click", async () => {
+      const alertBox = document.getElementById("alertBox");
+      const tuition_name = document.getElementById("tuitionName").value.trim();
+      const brand_color = document.getElementById("brandColorHex").value.trim();
+      if (!tuition_name) { showAlert(alertBox, "Tuition name can't be empty."); return; }
+      if (!/^#[0-9a-fA-F]{6}$/.test(brand_color)) { showAlert(alertBox, "Brand color must be a hex color like #3654e0."); return; }
+      try {
+        await Api.request("admin", "/admin/settings/update", { method: "POST", body: { tuition_name, brand_color } });
+        Branding.applyColor(brand_color);
+        Branding.applyName(tuition_name);
+        showAlert(alertBox, "Saved. Every portal will pick this up on next load.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
 
     const input = document.getElementById("apiBaseUrl");
     input.value = localStorage.getItem("tms_api_base_url") || window.API_BASE_URL;

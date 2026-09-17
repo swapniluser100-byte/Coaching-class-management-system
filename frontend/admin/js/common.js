@@ -36,7 +36,7 @@ function renderAdminShell(activeHref, innerHtml) {
   document.body.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand">📚 Tuition Admin</div>
+        <div class="brand">📚 <span data-brand-name="Admin">Tuition Admin</span></div>
         <nav>${navHtml}</nav>
         <div style="margin-top:24px; padding: 0 12px;">
           <button class="btn btn-secondary btn-block" id="logoutBtn">Log out</button>
@@ -61,6 +61,7 @@ function renderAdminShell(activeHref, innerHtml) {
     Api.clearToken("admin");
     window.location.href = "index.html";
   });
+  Branding.load().then((d) => Branding.applyName(d.tuition_name));
 }
 
 function setPageTitle(title) {
