@@ -43,6 +43,7 @@ function renderAdminShell(activeHref, innerHtml) {
         </div>
       </aside>
       <div class="main">
+        <div id="renewalBanner"></div>
         <div class="admin-mobile-nav mobile-nav">${mobileNavHtml}<a href="#" id="logoutLinkMobile" style="margin-left:auto;">Log out</a></div>
         <div class="topbar">
           <div id="pageTitle" style="font-weight:700;"></div>
@@ -62,6 +63,53 @@ function renderAdminShell(activeHref, innerHtml) {
     window.location.href = "index.html";
   });
   Branding.load().then((d) => { Branding.applyName(d.tuition_name); Branding.applyLogo(d.logo_url); });
+  loadRenewalBanner();
+}
+
+// ---------------------------------------------------------------------------
+// Informational renewal reminder — purely visual, never blocks anything. Only
+// appears when a renewal date is configured (Settings > Plan / Renewal) and
+// is within 14 days or already past; dismissible per browser session.
+// ---------------------------------------------------------------------------
+async function loadRenewalBanner() {
+  const el = document.getElementById("renewalBanner");
+  if (!el) return;
+  try {
+    const r = await Api.request("admin", "/admin/settings/renewal");
+    if (!r.renewal_date) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(`${r.renewal_date}T00:00:00`);
+    const daysLeft = Math.round((due - today) / 86400000);
+    if (daysLeft > 14) return;
+
+    const dismissKey = `tms_renewal_dismissed_${r.renewal_date}`;
+    if (sessionStorage.getItem(dismissKey)) return;
+
+    const overdue = daysLeft < 0;
+    const dateText = due.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    const amountText = r.renewal_amount != null ? ` (${r.renewal_amount})` : "";
+    const contactText = r.renewal_contact ? ` Contact ${escapeHtml(r.renewal_contact)} to renew.` : "";
+    const whenText = overdue
+      ? `was due on ${dateText}`
+      : daysLeft === 0
+      ? "is due today"
+      : `renews on ${dateText} (in ${daysLeft} day${daysLeft === 1 ? "" : "s"})`;
+
+    el.innerHTML = `
+      <div class="renewal-banner ${overdue ? "danger" : "warning"}">
+        <span>Your plan${amountText} ${whenText}.${contactText}</span>
+        <button type="button" class="renewal-banner-close" id="renewalBannerClose" aria-label="Dismiss">&times;</button>
+      </div>
+    `;
+    document.getElementById("renewalBannerClose").addEventListener("click", () => {
+      sessionStorage.setItem(dismissKey, "1");
+      el.innerHTML = "";
+    });
+  } catch (err) {
+    // Informational only — never block the console over this.
+  }
 }
 
 function setPageTitle(title) {

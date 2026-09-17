@@ -234,6 +234,16 @@ tbody tr:hover { background: var(--color-bg); }
 .alert-danger { background: var(--color-danger-bg); color: var(--color-danger); }
 .alert-success { background: var(--color-success-bg); color: var(--color-success); }
 .alert-info { background: #eaf0ff; color: var(--color-primary-dark); }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+
+.renewal-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--color-border);
+}
+.renewal-banner.warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.renewal-banner.danger { background: var(--color-danger-bg); color: var(--color-danger); }
+.renewal-banner-close { background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; color: inherit; opacity: 0.7; padding: 0 4px; }
+.renewal-banner-close:hover { opacity: 1; }
 
 /* ---- Utility ---- */
 .flex { display: flex; align-items: center; }
