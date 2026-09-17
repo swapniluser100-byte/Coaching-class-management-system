@@ -11,7 +11,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "tuition-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "d3273028-1d1c-406a-8cd3-83dbf7e7eabb"
 
 # ---------------------------------------------------------------------------
 # R2 Bucket for student photos
@@ -27,7 +27,7 @@ bucket_name = "tuition-student-photos"
 # ---------------------------------------------------------------------------
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "0c9499c3d0b44adbba76bbed3fe1b15c"
 
 # ---------------------------------------------------------------------------
 # Secrets (set with `wrangler secret put <NAME>`, do NOT hardcode here):

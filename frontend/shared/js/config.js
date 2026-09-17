@@ -3,7 +3,7 @@
 // "https://tuition-management-api.<subdomain>.workers.dev". Any portal's
 // Settings page can override this per-browser via localStorage.
 (function () {
-  const DEFAULT_API_BASE_URL = "http://127.0.0.1:8787";
+  const DEFAULT_API_BASE_URL = "https://tuition-management-api.swapniluser100.workers.dev";
   const stored = localStorage.getItem("tms_api_base_url");
   window.API_BASE_URL = stored || DEFAULT_API_BASE_URL;
 })();
