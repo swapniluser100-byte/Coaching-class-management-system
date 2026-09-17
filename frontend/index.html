@@ -6,42 +6,101 @@
 <title>Tuition Management System</title>
 <link rel="stylesheet" href="shared/css/styles.css" />
 <style>
-  .brand-hero { text-align: center; margin-bottom: 8px; }
-  .brand-hero-icon { font-size: 44px; line-height: 1; margin-bottom: 6px; }
-  .brand-hero-logo { max-height: 72px; max-width: 240px; margin-bottom: 6px; }
-  .brand-hero-name { font-size: 40px; font-weight: 800; color: var(--color-primary); letter-spacing: -0.02em; margin: 0 0 4px; }
+  body {
+    background:
+      radial-gradient(560px 320px at 50% -80px, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent),
+      var(--color-bg);
+  }
+
+  .landing-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 56px 24px; }
+  .landing-inner { width: 100%; max-width: 660px; }
+
+  .brand-hero { text-align: center; margin-bottom: 40px; }
+  .brand-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 108px; min-height: 108px; padding: 12px 28px;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 22px;
+    box-shadow: 0 10px 30px rgba(16, 24, 40, 0.09);
+    margin-bottom: 20px;
+  }
+  .brand-hero-icon { font-size: 56px; line-height: 1; }
+  .brand-hero-logo { display: block; max-height: 96px; max-width: 320px; }
+
+  .brand-hero-name { font-size: 38px; font-weight: 800; color: var(--color-text); letter-spacing: -0.02em; margin: 0 0 8px; }
+  .brand-hero-tagline { color: var(--color-text-muted); font-size: 15px; margin: 0; }
+
+  .portal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 640px) { .portal-grid { grid-template-columns: 1fr; } }
+
+  .portal-card {
+    display: block; text-align: center; text-decoration: none;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
+    padding: 28px 18px; box-shadow: var(--shadow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .portal-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px rgba(16, 24, 40, 0.12);
+    border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    text-decoration: none;
+  }
+  .portal-icon {
+    width: 60px; height: 60px; border-radius: 16px; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center; font-size: 30px;
+    background: color-mix(in srgb, var(--color-primary) 12%, white);
+  }
+  .portal-title { font-size: 17px; font-weight: 700; color: var(--color-text); margin: 0 0 2px; }
+  .portal-sub { color: var(--color-text-muted); font-size: 13px; margin: 0; }
+  .portal-cta {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    font-size: 13px; font-weight: 600; color: var(--color-primary); margin-top: 14px;
+  }
+  .portal-card:hover .portal-cta { text-decoration: underline; }
+
+  .landing-footer { text-align: center; color: var(--color-text-muted); font-size: 12px; margin-top: 40px; }
 </style>
 </head>
 <body>
-  <div class="auth-wrap">
-    <div style="width:100%; max-width:520px;">
+  <div class="landing-wrap">
+    <div class="landing-inner">
       <div class="brand-hero">
-        <div class="brand-hero-icon" data-brand-icon>📚</div>
-        <img data-brand-logo class="brand-hero-logo hidden" alt="Logo" />
+        <div class="brand-mark">
+          <span class="brand-hero-icon" data-brand-icon>📚</span>
+          <img data-brand-logo class="brand-hero-logo hidden" alt="Logo" />
+        </div>
         <h1 class="brand-hero-name" data-brand-name>Tuition Management System</h1>
+        <p class="brand-hero-tagline">Pune · 11th / 12th / CET Batches</p>
       </div>
-      <p class="text-center text-muted mb-0">Pune · 11th / 12th / CET Batches</p>
-      <div class="grid grid-3 mt-16">
-        <a class="card text-center" href="admin/index.html" style="text-decoration:none;">
-          <div style="font-size:32px;">🛠️</div>
-          <h3>Admin</h3>
-          <p class="text-muted" style="font-size:13px;">Console</p>
+
+      <div class="portal-grid">
+        <a class="portal-card" href="admin/index.html">
+          <div class="portal-icon">🛠️</div>
+          <h3 class="portal-title">Admin</h3>
+          <p class="portal-sub">Console</p>
+          <div class="portal-cta">Enter <span aria-hidden="true">→</span></div>
         </a>
-        <a class="card text-center" href="teacher/index.html" style="text-decoration:none;">
-          <div style="font-size:32px;">🧑‍🏫</div>
-          <h3>Teacher</h3>
-          <p class="text-muted" style="font-size:13px;">Dashboard</p>
+        <a class="portal-card" href="teacher/index.html">
+          <div class="portal-icon">🧑‍🏫</div>
+          <h3 class="portal-title">Teacher</h3>
+          <p class="portal-sub">Dashboard</p>
+          <div class="portal-cta">Enter <span aria-hidden="true">→</span></div>
         </a>
-        <a class="card text-center" href="student/index.html" style="text-decoration:none;">
-          <div style="font-size:32px;">🎓</div>
-          <h3>Student</h3>
-          <p class="text-muted" style="font-size:13px;">Portal</p>
+        <a class="portal-card" href="student/index.html">
+          <div class="portal-icon">🎓</div>
+          <h3 class="portal-title">Student</h3>
+          <p class="portal-sub">Portal</p>
+          <div class="portal-cta">Enter <span aria-hidden="true">→</span></div>
         </a>
       </div>
+
+      <p class="landing-footer">© <span id="year"></span> <span data-brand-name>Tuition Management System</span>. All rights reserved.</p>
     </div>
   </div>
 
   <script src="shared/js/config.js"></script>
   <script src="shared/js/branding.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
 </body>
 </html>
