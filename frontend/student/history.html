@@ -124,7 +124,7 @@
 
       document.getElementById("calGrid").innerHTML = cellsHtml;
 
-      const oldestMonth = allDates.length ? allDates[allDates.length - 1].slice(0, 7) : null;
+      const oldestMonth = allDates.length ? allDates[0].slice(0, 7) : null;
       const viewMonthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
       document.getElementById("prevMonthBtn").disabled = oldestMonth !== null && viewMonthStr <= oldestMonth;
       document.getElementById("nextMonthBtn").disabled = viewMonthStr >= todayStr().slice(0, 7);
