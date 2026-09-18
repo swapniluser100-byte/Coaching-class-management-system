@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Student Detail · Teacher</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/branding.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireTeacherAuth();
+    renderTeacherShell("students.html", `
+      <a href="students.html" class="text-muted" style="font-size:13px;">${iconSvg("arrow-left")} Back to Students</a>
+      <h1 id="studentName" class="mt-8">Loading…</h1>
+      <p class="text-muted" id="studentSub"></p>
+      <div id="alertBox"></div>
+
+      <div class="grid grid-3" id="feeTiles"></div>
+
+      <div class="card">
+        <h2>Total Fee</h2>
+        <div class="flex gap-8" style="align-items:flex-end;">
+          <div style="flex:1;">
+            <label>Total Fee for this student</label>
+            <input id="totalFeeInput" type="number" min="0" step="0.01" placeholder="e.g. 25000" />
+          </div>
+          <button class="btn" id="saveTotalFeeBtn">Save</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Add Payment</h2>
+        <div class="grid grid-2">
+          <div>
+            <label>Amount</label>
+            <input id="payAmount" type="number" min="0" step="0.01" placeholder="e.g. 5000" />
+          </div>
+          <div>
+            <label>Date</label>
+            <input id="payDate" type="date" />
+          </div>
+          <div>
+            <label>Mode</label>
+            <select id="payMode">
+              <option value="Cash">Cash</option>
+              <option value="Online">Online</option>
+              <option value="UPI">UPI</option>
+              <option value="Cheque">Cheque</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label>Notes (optional)</label>
+            <input id="payNotes" placeholder="e.g. 1st installment" />
+          </div>
+        </div>
+        <button class="btn mt-16" id="addPaymentBtn">${iconSvg("save")} Add Payment</button>
+      </div>
+
+      <div class="card">
+        <h2>Payment History</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Amount</th><th>Mode</th><th>Notes</th><th></th></tr></thead>
+            <tbody id="paymentsBody"><tr><td colspan="5" class="text-muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+
+    const params = new URLSearchParams(location.search);
+    const studentId = params.get("student_id");
+    if (!studentId) {
+      showAlert(document.getElementById("alertBox"), "No student specified.");
+    }
+
+    document.getElementById("payDate").valueAsDate = new Date();
+
+    function feeTile(value, label, variant) {
+      return `
+        <div class="card stat-tile ${variant || ""}" style="margin-bottom:0;">
+          <div class="value">${value}</div>
+          <div class="label">${label}</div>
+        </div>
+      `;
+    }
+
+    async function loadDetail() {
+      const data = await Api.request("tutor", `/fees/student/${studentId}`);
+
+      document.getElementById("studentName").textContent = data.student.name;
+      document.getElementById("studentSub").textContent = `${data.student.phone}${data.student.class_level ? ` · ${data.student.class_level}` : ""}`;
+      document.getElementById("totalFeeInput").value = data.total_fee ?? "";
+
+      const remaining = data.remaining_fee;
+      document.getElementById("feeTiles").innerHTML =
+        feeTile(data.total_fee != null ? data.total_fee : "—", "Total Fee") +
+        feeTile(data.paid_fee, "Paid Fee", "stat-tile-present") +
+        feeTile(remaining != null ? remaining : "—", "Remaining Fee", remaining == null ? "" : remaining > 0 ? "stat-tile-absent" : "stat-tile-present");
+
+      const tbody = document.getElementById("paymentsBody");
+      if (data.payments.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-muted">No payments recorded yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = data.payments.map((p) => `
+        <tr>
+          <td>${p.payment_date}</td>
+          <td>${p.amount}</td>
+          <td>${escapeHtml(p.mode || "—")}</td>
+          <td>${escapeHtml(p.notes || "—")}</td>
+          <td><button class="btn btn-danger btn-sm" type="button" onclick="deletePayment('${p.id}')">Delete</button></td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("saveTotalFeeBtn").addEventListener("click", async () => {
+      const alertBox = document.getElementById("alertBox");
+      const val = document.getElementById("totalFeeInput").value;
+      const total_fee = val === "" ? null : parseFloat(val);
+      try {
+        await Api.request("tutor", `/fees/student/${studentId}/total`, { method: "POST", body: { total_fee } });
+        await loadDetail();
+        showAlert(alertBox, "Total fee saved.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
+
+    document.getElementById("addPaymentBtn").addEventListener("click", async () => {
+      const alertBox = document.getElementById("alertBox");
+      const amount = parseFloat(document.getElementById("payAmount").value);
+      const payment_date = document.getElementById("payDate").value;
+      const mode = document.getElementById("payMode").value;
+      const notes = document.getElementById("payNotes").value.trim();
+      if (!amount || amount <= 0) { showAlert(alertBox, "Enter a valid amount."); return; }
+      if (!payment_date) { showAlert(alertBox, "Pick a payment date."); return; }
+      try {
+        await Api.request("tutor", `/fees/student/${studentId}/payments`, {
+          method: "POST",
+          body: { amount, payment_date, mode, notes: notes || undefined },
+        });
+        document.getElementById("payAmount").value = "";
+        document.getElementById("payNotes").value = "";
+        document.getElementById("payDate").valueAsDate = new Date();
+        await loadDetail();
+        showAlert(alertBox, "Payment added.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
+
+    window.deletePayment = async (paymentId) => {
+      if (!confirm("Delete this payment record? This can't be undone.")) return;
+      const alertBox = document.getElementById("alertBox");
+      try {
+        await Api.request("tutor", `/fees/payment/${paymentId}`, { method: "DELETE" });
+        await loadDetail();
+        showAlert(alertBox, "Payment deleted.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    };
+
+    if (studentId) {
+      loadDetail().catch((err) => showAlert(document.getElementById("alertBox"), err.message));
+    }
+  </script>
+</body>
+</html>

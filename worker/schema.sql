@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS students (
   pin_hash            TEXT,       -- optional 4-digit PIN (admin-set) for login-free attendance marking
   pin_failed_attempts INTEGER NOT NULL DEFAULT 0, -- locks after 5; admin reset required
   active              INTEGER NOT NULL DEFAULT 1,
+  total_fee           REAL,       -- agreed course fee for this student; paid/remaining are derived from fee_payments
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -258,3 +259,21 @@ CREATE TABLE IF NOT EXISTS vendor_users (
   name          TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ---------------------------------------------------------------------------
+-- fee_payments — one row per fee payment recorded against a student. Paid
+-- and remaining fee are always derived by summing these, never stored, so
+-- there's a single source of truth (students.total_fee minus this sum).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS fee_payments (
+  id           TEXT PRIMARY KEY,
+  student_id   TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  amount       REAL NOT NULL,
+  payment_date TEXT NOT NULL, -- YYYY-MM-DD
+  mode         TEXT,          -- cash | online | cheque | upi | other (free text)
+  notes        TEXT,
+  recorded_by  TEXT,          -- tutor_id or admin_id who recorded it
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_fee_payments_student ON fee_payments(student_id);

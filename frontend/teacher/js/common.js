@@ -1,5 +1,6 @@
 const TEACHER_NAV = [
   { href: "dashboard.html", label: "My Batches" },
+  { href: "students.html", label: "Students" },
   { href: "attendance.html", label: "Attendance / QR" },
   { href: "analytics.html", label: "Analytics" },
   { href: "exams.html", label: "Exams & Marks" },

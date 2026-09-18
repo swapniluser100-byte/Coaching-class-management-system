@@ -33,6 +33,23 @@ tutor.get("/batches", async (c) => {
   return ok(c, results);
 });
 
+// Every distinct student across this tutor's batches, with which batch(es)
+// they're in — feeds the teacher's Students roster (fee tracking entry
+// point).
+tutor.get("/students", async (c) => {
+  const tutorId = c.get("jwtPayload").sub;
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.id, s.name, s.phone, s.class_level,
+       GROUP_CONCAT(DISTINCT b.name) as batch_names
+     FROM students s
+     JOIN batch_students bs ON bs.student_id = s.id
+     JOIN batches b ON b.id = bs.batch_id
+     WHERE b.tutor_id = ? AND s.active = 1
+     GROUP BY s.id ORDER BY s.name`
+  ).bind(tutorId).all();
+  return ok(c, results);
+});
+
 tutor.get("/exams", async (c) => {
   const tutorId = c.get("jwtPayload").sub;
   const { results } = await c.env.DB.prepare(

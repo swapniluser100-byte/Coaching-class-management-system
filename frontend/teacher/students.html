@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Students · Teacher</title>
+<link rel="stylesheet" href="../shared/css/styles.css" />
+</head>
+<body>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/branding.js"></script>
+  <script src="../shared/js/api.js"></script>
+  <script src="../shared/js/icons.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    requireTeacherAuth();
+    renderTeacherShell("students.html", `
+      <h1>Students</h1>
+      <div id="alertBox"></div>
+      <div class="card">
+        <input id="studentSearch" placeholder="Search by name or phone…" />
+        <div class="table-wrap mt-16">
+          <table>
+            <thead><tr><th>Student</th><th>Phone</th><th>Batch(es)</th><th></th></tr></thead>
+            <tbody id="studentsBody"><tr><td colspan="4" class="text-muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    `);
+
+    let allStudents = [];
+
+    function renderStudents() {
+      const query = document.getElementById("studentSearch").value.trim().toLowerCase();
+      const filtered = query
+        ? allStudents.filter((s) => s.name.toLowerCase().includes(query) || (s.phone || "").includes(query))
+        : allStudents;
+
+      const tbody = document.getElementById("studentsBody");
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-muted">No students match.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = filtered.map((s) => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${escapeHtml(s.phone)}</td>
+          <td>${escapeHtml(s.batch_names || "")}</td>
+          <td><a class="btn btn-secondary btn-sm" href="student-detail.html?student_id=${s.id}">${iconSvg("search")} View / Fees</a></td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("studentSearch").addEventListener("input", renderStudents);
+
+    (async () => {
+      try {
+        allStudents = await Api.request("tutor", "/tutor/students");
+        renderStudents();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

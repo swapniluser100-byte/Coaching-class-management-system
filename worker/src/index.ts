@@ -10,6 +10,7 @@ import attendance from "./routes/attendance";
 import photos from "./routes/photos";
 import publicRoutes from "./routes/public";
 import vendor from "./routes/vendor";
+import fees from "./routes/fees";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -34,6 +35,7 @@ app.route("/attendance", attendance);
 app.route("/photos", photos);
 app.route("/public", publicRoutes);
 app.route("/vendor", vendor);
+app.route("/fees", fees);
 
 app.notFound((c) => c.json({ success: false, error: "Not found" }, 404));
 app.onError((err, c) => {
