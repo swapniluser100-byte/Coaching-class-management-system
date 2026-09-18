@@ -222,10 +222,9 @@ async function finalizeAttempt(db: D1Database, attemptId: string) {
 
 // ---------------------------------------------------------------------------
 // Full exam history — every classroom + online exam for the student's
-// batches, with marks where uploaded/graded. Any online exam still open (or
-// upcoming) and not yet submitted is sorted to the top so the student
-// notices it in time to start; everything else sorts by date, most recent
-// first.
+// batches, with marks where uploaded/graded. Sorted by scheduled date
+// (starts_at for online, exam_date for classroom) descending, so a
+// still-upcoming or open online exam naturally lands at the top.
 // ---------------------------------------------------------------------------
 type ExamHistoryRow = {
   exam_id: string; exam_name: string; exam_type: string; exam_date: string; total_marks: number;
@@ -262,17 +261,7 @@ student.get("/exams/history", async (c) => {
     return { ...r, window_status: windowStatus };
   });
 
-  // Pending = an online exam that's still actionable (upcoming or open) and
-  // hasn't been submitted yet — these belong at the top, soonest first.
-  const isPending = (r: (typeof withStatus)[number]) =>
-    r.exam_type === "online" && r.attempt_status !== "submitted" && (r.window_status === "upcoming" || r.window_status === "active");
-
-  const pending = withStatus.filter(isPending).sort((a, b) =>
-    new Date(a.starts_at as string).getTime() - new Date(b.starts_at as string).getTime()
-  );
-  const rest = withStatus.filter((r) => !isPending(r));
-
-  return ok(c, [...pending, ...rest]);
+  return ok(c, withStatus);
 });
 
 student.post("/exam/:exam_id/start", async (c) => {

@@ -6,8 +6,7 @@
 <title>Exam History · Student</title>
 <link rel="stylesheet" href="../shared/css/styles.css" />
 <style>
-  .exam-row-pending td { background: color-mix(in srgb, var(--color-primary) 7%, white); }
-  .exam-row-pending td:first-child { border-left: 3px solid var(--color-primary); }
+  .exam-tile-pending { border-color: var(--color-primary); border-left-width: 3px; background: color-mix(in srgb, var(--color-primary) 6%, white); }
 </style>
 </head>
 <body>
@@ -28,7 +27,7 @@
       return r.exam_type === "online" && r.attempt_status !== "submitted" && (r.window_status === "upcoming" || r.window_status === "active");
     }
 
-    function dateTimeCell(r) {
+    function dateTimeText(r) {
       if (r.exam_type === "online") {
         return new Date(r.starts_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
       }
@@ -39,23 +38,23 @@
       return r.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`;
     }
 
-    function marksCell(r) {
+    function marksBlock(r) {
       if (isPending(r)) {
         if (r.window_status === "upcoming") return `<span class="badge badge-muted">Opens ${new Date(r.starts_at).toLocaleString()}</span>`;
         return r.attempt_status === "in_progress" ? `<span class="badge badge-warning">In progress</span>` : `<span class="badge badge-success">Open now</span>`;
       }
-      if (r.marks_obtained != null) return `<strong>${r.marks_obtained}/${r.total_marks}</strong>`;
+      if (r.marks_obtained != null) return `<div class="value" style="font-size:20px;">${r.marks_obtained}/${r.total_marks}</div>`;
       return `<span class="text-muted">Pending</span>`;
     }
 
-    function actionCell(r) {
+    function actionButton(r) {
       if (isPending(r) && r.window_status === "active") {
         return `<a class="btn btn-sm" href="take-exam.html?exam_id=${r.exam_id}">${iconSvg("play")} ${r.attempt_status === "in_progress" ? "Resume" : "Start"}</a>`;
       }
       if (r.exam_type === "online" && r.attempt_status === "submitted") {
         return `<a class="btn btn-secondary btn-sm" href="take-exam.html?exam_id=${r.exam_id}&attempt_id=${r.attempt_id}&review=1">${iconSvg("check-circle")} View Details</a>`;
       }
-      return `<span class="text-muted">—</span>`;
+      return "";
     }
 
     (async () => {
@@ -66,25 +65,21 @@
           wrap.innerHTML = `<p class="text-muted">No exams yet.</p>`;
           return;
         }
-        wrap.innerHTML = `
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Exam Name</th><th>Date / Time</th><th>Type</th><th>Marks</th><th>Remarks</th><th></th></tr></thead>
-              <tbody>
-                ${exams.map((r) => `
-                  <tr class="${isPending(r) ? "exam-row-pending" : ""}">
-                    <td>${escapeHtml(r.exam_name)}</td>
-                    <td>${dateTimeCell(r)}</td>
-                    <td>${typeBadge(r)}</td>
-                    <td>${marksCell(r)}</td>
-                    <td>${r.remarks ? escapeHtml(r.remarks) : `<span class="text-muted">—</span>`}</td>
-                    <td>${actionCell(r)}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
+        wrap.innerHTML = exams.map((r) => `
+          <div class="card ${isPending(r) ? "exam-tile-pending" : ""}">
+            <div class="flex-between" style="align-items:flex-start; flex-wrap:wrap; gap:12px;">
+              <div>
+                <h3 class="mb-0">${escapeHtml(r.exam_name)}</h3>
+                <p class="text-muted mb-0" style="font-size:13px;">${dateTimeText(r)} · ${typeBadge(r)}</p>
+                ${r.remarks ? `<p class="text-muted mb-0 mt-8" style="font-size:13px;"><strong>Remarks:</strong> ${escapeHtml(r.remarks)}</p>` : ""}
+              </div>
+              <div class="text-center" style="flex-shrink:0;">
+                ${marksBlock(r)}
+                <div class="mt-8">${actionButton(r)}</div>
+              </div>
+            </div>
           </div>
-        `;
+        `).join("");
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
