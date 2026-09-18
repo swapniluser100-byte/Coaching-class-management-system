@@ -32,8 +32,12 @@
               <option value="12th">12th</option>
               <option value="CET">CET</option>
             </select>
-            <label>Assign to Batch (optional)</label>
+            <label>Add to Batch (optional)</label>
             <select id="batchId"><option value="">— none —</option></select>
+            <div class="mt-8 hidden" id="currentBatchesField">
+              <label class="mb-0">Currently in</label>
+              <div id="currentBatchesChips"></div>
+            </div>
             <div class="flex gap-8 mt-16">
               <button class="btn" type="submit" id="saveBtn">Save</button>
               <button class="btn btn-secondary" type="button" id="resetBtn">Clear</button>
@@ -48,7 +52,7 @@
           </div>
           <div class="table-wrap mt-16">
             <table>
-              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Batch</th><th>Device</th><th>PIN</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Photo</th><th>Name</th><th>Phone</th><th>Class</th><th>Batches</th><th>Device</th><th>PIN</th><th>Status</th><th></th></tr></thead>
               <tbody id="studentsBody"><tr><td colspan="9" class="text-muted">Loading…</td></tr></tbody>
             </table>
           </div>
@@ -67,6 +71,25 @@
         allBatches.map((b) => `<option value="${b.id}">${escapeHtml(b.name)} (${escapeHtml(b.class_level)})</option>`).join("");
     }
 
+    // batch_ids / batch_names are parallel comma-separated lists (every
+    // batch the student is in, not just the most recent one).
+    function studentBatchList(s) {
+      const ids = (s.batch_ids || "").split(",").filter(Boolean);
+      const names = (s.batch_names || "").split(",").filter(Boolean);
+      return ids.map((id, i) => ({ id, name: names[i] }));
+    }
+
+    function batchChips(s, removable) {
+      const batches = studentBatchList(s);
+      if (batches.length === 0) return `<span class="badge badge-muted">Unassigned</span>`;
+      return batches.map((b) => `
+        <span class="badge badge-muted" style="margin:0 4px 4px 0; display:inline-flex; align-items:center; gap:4px;">
+          ${escapeHtml(b.name)}
+          ${removable ? `<button type="button" onclick="removeFromBatch('${s.id}','${b.id}')" title="Remove from this batch" style="background:none; border:none; cursor:pointer; padding:0; font-weight:700; color:inherit; line-height:1;">×</button>` : ""}
+        </span>
+      `).join("");
+    }
+
     function renderStudents(list) {
       const tbody = document.getElementById("studentsBody");
       if (list.length === 0) {
@@ -79,7 +102,7 @@
           <td>${escapeHtml(s.name)}</td>
           <td>${escapeHtml(s.phone)}</td>
           <td>${escapeHtml(s.class_level || "-")}</td>
-          <td>${s.batch_name ? escapeHtml(s.batch_name) : `<span class="badge badge-muted">Unassigned</span>`}</td>
+          <td>${batchChips(s, true)}</td>
           <td>${s.device_fingerprint ? `<span class="badge badge-success">Bound</span>` : `<span class="badge badge-muted">Not bound</span>`}</td>
           <td>${s.pin_failed_attempts >= 5 ? `<span class="badge badge-danger">Locked</span>` : s.pin_set ? `<span class="badge badge-success">Set</span>` : `<span class="badge badge-muted">Not set</span>`}</td>
           <td>${s.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
@@ -125,6 +148,7 @@
       document.getElementById("studentForm").reset();
       document.getElementById("studentId").value = "";
       document.getElementById("formTitle").textContent = "Add Student";
+      document.getElementById("currentBatchesField").classList.add("hidden");
     });
 
     window.editStudent = (id) => {
@@ -135,9 +159,28 @@
       document.getElementById("phone").value = s.phone;
       document.getElementById("parentPhone").value = s.parent_phone || "";
       document.getElementById("classLevel").value = s.class_level || "11th";
-      document.getElementById("batchId").value = s.batch_id || "";
+      // Left blank on purpose: this dropdown adds an *additional* batch now
+      // that a student can be in more than one, so it shouldn't pre-select
+      // any single existing membership.
+      document.getElementById("batchId").value = "";
+      document.getElementById("currentBatchesField").classList.remove("hidden");
+      document.getElementById("currentBatchesChips").innerHTML = batchChips(s, true);
       document.getElementById("formTitle").textContent = "Edit Student";
       window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.removeFromBatch = async (studentId, batchId) => {
+      if (!confirm("Remove this student from the batch? Their attendance and marks history for it are kept.")) return;
+      try {
+        await Api.request("admin", "/admin/batch/remove-student", { method: "POST", body: { student_id: studentId, batch_id: batchId } });
+        await loadStudents();
+        const s = allStudents.find((x) => x.id === studentId);
+        if (s && document.getElementById("studentId").value === studentId) {
+          document.getElementById("currentBatchesChips").innerHTML = batchChips(s, true);
+        }
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
     };
 
     window.deleteStudent = async (id) => {
@@ -205,6 +248,7 @@
         document.getElementById("studentForm").reset();
         document.getElementById("studentId").value = "";
         document.getElementById("formTitle").textContent = "Add Student";
+        document.getElementById("currentBatchesField").classList.add("hidden");
         await loadStudents();
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);

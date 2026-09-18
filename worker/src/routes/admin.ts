@@ -54,12 +54,18 @@ admin.use("/*", requireAuth("admin"));
 // Students
 // ---------------------------------------------------------------------------
 admin.get("/students", async (c) => {
+  // batch_ids/batch_names are parallel comma-separated lists (every batch
+  // the student is in, not just the most recent) -- they come from the same
+  // GROUP BY so the two lists line up position-for-position.
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.name, s.phone, s.parent_phone, s.class_level, s.photo_url, s.device_fingerprint, s.active, s.created_at,
        (s.pin_hash IS NOT NULL) as pin_set, s.pin_failed_attempts,
-       (SELECT bs.batch_id FROM batch_students bs WHERE bs.student_id = s.id ORDER BY bs.created_at DESC LIMIT 1) as batch_id,
-       (SELECT b.name FROM batch_students bs JOIN batches b ON b.id = bs.batch_id WHERE bs.student_id = s.id ORDER BY bs.created_at DESC LIMIT 1) as batch_name
-     FROM students s ORDER BY s.created_at DESC`
+       GROUP_CONCAT(b.id) as batch_ids,
+       GROUP_CONCAT(b.name) as batch_names
+     FROM students s
+     LEFT JOIN batch_students bs ON bs.student_id = s.id
+     LEFT JOIN batches b ON b.id = bs.batch_id
+     GROUP BY s.id ORDER BY s.created_at DESC`
   ).all();
   return ok(c, results);
 });
