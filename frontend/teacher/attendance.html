@@ -164,11 +164,15 @@
         <tr>
           <td>${escapeHtml(s.name)}</td>
           <td>
-            ${s.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-muted">Not yet</span>`}
+            ${s.status === "present" ? `<span class="badge badge-success">Present</span>`
+              : s.status === "absent" ? `<span class="badge badge-danger">Absent</span>`
+              : `<span class="badge badge-muted">Not yet</span>`}
             ${s.source === "manual" ? `<span class="badge badge-warning">Manual</span>` : ""}
           </td>
           <td>${s.timestamp || "-"}</td>
-          <td>${s.status === "present" ? "" : `<button class="btn btn-secondary btn-sm" onclick="markManual('${s.student_id}')">${iconSvg("check-circle")} Mark Present</button>`}</td>
+          <td>${s.status === "present"
+            ? `<button class="btn btn-danger btn-sm" onclick="markAbsent('${s.student_id}')">${iconSvg("stop")} Mark Absent</button>`
+            : `<button class="btn btn-secondary btn-sm" onclick="markManual('${s.student_id}')">${iconSvg("check-circle")} Mark Present</button>`}</td>
         </tr>
       `).join("");
     }
@@ -180,6 +184,20 @@
       if (!currentSession) return;
       try {
         await Api.request("tutor", "/attendance/mark-manual", {
+          method: "POST",
+          body: { batch_id: currentSession.batch_id, student_id: studentId },
+        });
+        await refreshLive();
+      } catch (err) {
+        showAlert(document.getElementById("alertBox"), err.message);
+      }
+    };
+
+    window.markAbsent = async (studentId) => {
+      if (!currentSession) return;
+      if (!confirm("Mark this student absent? This overrides their current present mark.")) return;
+      try {
+        await Api.request("tutor", "/attendance/mark-absent", {
           method: "POST",
           body: { batch_id: currentSession.batch_id, student_id: studentId },
         });

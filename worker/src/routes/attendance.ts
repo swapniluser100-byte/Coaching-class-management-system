@@ -262,4 +262,39 @@ attendance.post("/mark-manual", requireAuth("tutor", "admin"), async (c) => {
   return ok(c, { student_id, batch_id, date: markDate, status: "present" }, 201);
 });
 
+// ---------------------------------------------------------------------------
+// POST /attendance/mark-absent — tutor/admin corrects a present mark (self,
+// PIN, or manual) back to absent. Same ownership rules as mark-manual;
+// always recorded as source='manual' since it's an explicit override.
+// ---------------------------------------------------------------------------
+attendance.post("/mark-absent", requireAuth("tutor", "admin"), async (c) => {
+  const { batch_id, student_id, date } = await c.req.json<{
+    batch_id: string; student_id: string; date?: string;
+  }>();
+  if (!batch_id || !student_id) return fail(c, "batch_id and student_id are required", 400);
+
+  const jwt = c.get("jwtPayload");
+  if (jwt.role === "tutor") {
+    const batch = await c.env.DB.prepare("SELECT id FROM batches WHERE id = ? AND tutor_id = ?")
+      .bind(batch_id, jwt.sub).first();
+    if (!batch) return fail(c, "Batch not found or not assigned to you", 403);
+  }
+
+  const membership = await c.env.DB.prepare(
+    "SELECT 1 FROM batch_students WHERE batch_id = ? AND student_id = ?"
+  ).bind(batch_id, student_id).first();
+  if (!membership) return fail(c, "Student is not enrolled in this batch", 404);
+
+  const markDate = date || new Date().toISOString().slice(0, 10);
+  const id = newId("att");
+  await c.env.DB.prepare(
+    `INSERT INTO attendance (id, student_id, batch_id, date, status, timestamp, source)
+     VALUES (?, ?, ?, ?, 'absent', datetime('now'), 'manual')
+     ON CONFLICT (student_id, batch_id, date)
+     DO UPDATE SET status = 'absent', timestamp = datetime('now'), source = 'manual'`
+  ).bind(id, student_id, batch_id, markDate).run();
+
+  return ok(c, { student_id, batch_id, date: markDate, status: "absent" }, 201);
+});
+
 export default attendance;
