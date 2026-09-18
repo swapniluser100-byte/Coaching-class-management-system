@@ -5,6 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>History · Student</title>
 <link rel="stylesheet" href="../shared/css/styles.css" />
+<style>
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .cal-header h2 { margin: 0; font-size: 17px; }
+  .cal-nav-btn {
+    width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--color-border);
+    background: var(--color-surface); color: var(--color-text); font-size: 16px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .cal-nav-btn:hover { background: var(--color-bg); }
+  .cal-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; padding: 2px 0 8px; }
+  .cal-day {
+    aspect-ratio: 1; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; border: 1px solid var(--color-border); background: var(--color-surface);
+    color: var(--color-text); position: relative;
+  }
+  .cal-day.cal-empty { border-color: transparent; background: transparent; }
+  .cal-day.cal-present { background: var(--color-success-bg); border-color: var(--color-success); color: var(--color-success); }
+  .cal-day.cal-absent { background: var(--color-danger-bg); border-color: var(--color-danger); color: var(--color-danger); }
+  .cal-day.cal-partial { background: linear-gradient(135deg, var(--color-success-bg) 50%, var(--color-danger-bg) 50%); border-color: var(--color-warning); color: var(--color-text); }
+  .cal-day.cal-marked { cursor: pointer; }
+  .cal-day.cal-today { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+  .cal-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; font-size: 12.5px; color: var(--color-text-muted); }
+  .cal-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  #dayDetail .card { margin-bottom: 0; }
+</style>
 </head>
 <body>
   <script src="../shared/js/config.js"></script>
@@ -18,30 +48,114 @@
       <h1>Attendance History</h1>
       <div id="alertBox"></div>
       <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Batch</th><th>Status</th></tr></thead>
-            <tbody id="historyBody"><tr><td colspan="3" class="text-muted">Loading…</td></tr></tbody>
-          </table>
+        <div class="cal-header">
+          <button class="cal-nav-btn" id="prevMonthBtn" aria-label="Previous month">‹</button>
+          <h2 id="monthLabel"></h2>
+          <button class="cal-nav-btn" id="nextMonthBtn" aria-label="Next month">›</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-legend">
+          <span><span class="cal-legend-dot" style="background:var(--color-success);"></span>Present</span>
+          <span><span class="cal-legend-dot" style="background:var(--color-danger);"></span>Absent</span>
+          <span><span class="cal-legend-dot" style="background:linear-gradient(135deg, var(--color-success) 50%, var(--color-danger) 50%);"></span>Mixed (multiple batches)</span>
         </div>
       </div>
+      <div id="dayDetail"></div>
     `);
+
+    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+    let recordsByDate = {};
+    let allDates = [];
+    let viewYear, viewMonth; // viewMonth is 0-indexed
+
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    function dayStatusClass(records) {
+      if (!records || records.length === 0) return "";
+      const hasPresent = records.some((r) => r.status === "present");
+      const hasAbsent = records.some((r) => r.status !== "present");
+      if (hasPresent && hasAbsent) return "cal-partial";
+      return hasPresent ? "cal-present" : "cal-absent";
+    }
+
+    function renderDayDetail(dateStr) {
+      const records = recordsByDate[dateStr] || [];
+      const el = document.getElementById("dayDetail");
+      if (records.length === 0) { el.innerHTML = ""; return; }
+      const niceDate = new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      el.innerHTML = `
+        <div class="card">
+          <h3 class="mb-0">${niceDate}</h3>
+          ${records.map((r) => `
+            <p class="flex-between mb-0 mt-8" style="font-size:14px;">
+              <span>${escapeHtml(r.batch_name)}</span>
+              ${r.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-danger">Absent</span>`}
+            </p>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderCalendar() {
+      document.getElementById("monthLabel").textContent = `${MONTH_NAMES[viewMonth]} ${viewYear}`;
+
+      const firstOfMonth = new Date(viewYear, viewMonth, 1);
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      const leadingBlanks = firstOfMonth.getDay();
+      const today = todayStr();
+
+      let cellsHtml = DOW.map((d) => `<div class="cal-dow">${d}</div>`).join("");
+      for (let i = 0; i < leadingBlanks; i++) cellsHtml += `<div class="cal-day cal-empty"></div>`;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const records = recordsByDate[dateStr];
+        const statusClass = dayStatusClass(records);
+        const classes = ["cal-day"];
+        if (statusClass) { classes.push(statusClass, "cal-marked"); }
+        if (dateStr === today) classes.push("cal-today");
+        cellsHtml += `<div class="${classes.join(" ")}" ${statusClass ? `onclick="showDay('${dateStr}')"` : ""} title="${records ? records.map((r) => `${r.batch_name}: ${r.status}`).join(", ") : ""}">${day}</div>`;
+      }
+
+      document.getElementById("calGrid").innerHTML = cellsHtml;
+
+      const oldestMonth = allDates.length ? allDates[allDates.length - 1].slice(0, 7) : null;
+      const viewMonthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
+      document.getElementById("prevMonthBtn").disabled = oldestMonth !== null && viewMonthStr <= oldestMonth;
+      document.getElementById("nextMonthBtn").disabled = viewMonthStr >= todayStr().slice(0, 7);
+    }
+
+    window.showDay = renderDayDetail;
+
+    document.getElementById("prevMonthBtn").addEventListener("click", () => {
+      viewMonth -= 1;
+      if (viewMonth < 0) { viewMonth = 11; viewYear -= 1; }
+      renderCalendar();
+    });
+    document.getElementById("nextMonthBtn").addEventListener("click", () => {
+      viewMonth += 1;
+      if (viewMonth > 11) { viewMonth = 0; viewYear += 1; }
+      renderCalendar();
+    });
 
     (async () => {
       try {
         const rows = await Api.request("student", "/student/history");
-        const tbody = document.getElementById("historyBody");
-        if (rows.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="3" class="text-muted">No attendance records yet.</td></tr>`;
-          return;
-        }
-        tbody.innerHTML = rows.map((r) => `
-          <tr>
-            <td>${r.date}</td>
-            <td>${escapeHtml(r.batch_name)}</td>
-            <td>${r.status === "present" ? `<span class="badge badge-success">Present</span>` : `<span class="badge badge-danger">Absent</span>`}</td>
-          </tr>
-        `).join("");
+        recordsByDate = {};
+        rows.forEach((r) => {
+          (recordsByDate[r.date] = recordsByDate[r.date] || []).push(r);
+        });
+        allDates = Object.keys(recordsByDate).sort();
+
+        const now = new Date();
+        viewYear = now.getFullYear();
+        viewMonth = now.getMonth();
+        renderCalendar();
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
