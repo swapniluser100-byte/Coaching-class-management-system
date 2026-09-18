@@ -29,6 +29,21 @@
   }
   .q-nav-btn.answered { background: var(--color-success-bg); border-color: var(--color-success); color: var(--color-success); }
   .q-nav-btn.current { outline: 2px solid var(--color-primary); outline-offset: 1px; color: var(--color-text); }
+
+  .medal-hero { font-size: 56px; line-height: 1; margin-bottom: 2px; }
+  .medal-hero.celebrate { animation: medal-pop 0.6s cubic-bezier(.34, 1.56, .64, 1); }
+  @keyframes medal-pop {
+    0% { transform: scale(0) rotate(-25deg); opacity: 0; }
+    60% { transform: scale(1.25) rotate(10deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); }
+  }
+  .medal-message { font-weight: 700; font-size: 16px; margin: 2px 0 0; }
+  .medal-message.gold { color: #b8860b; }
+  .medal-message.silver { color: #6b7280; }
+  .medal-message.bronze { color: #a0522d; }
+  .result-card-medal-1 { border-color: #d4af37; background: color-mix(in srgb, #d4af37 6%, white); }
+  .result-card-medal-2 { border-color: #9aa0a6; background: color-mix(in srgb, #9aa0a6 6%, white); }
+  .result-card-medal-3 { border-color: #cd7f32; background: color-mix(in srgb, #cd7f32 6%, white); }
 </style>
 </head>
 <body>
@@ -56,8 +71,10 @@
         <button class="btn btn-block mt-16" id="submitBtn" type="button">${iconSvg("check-circle")} Submit Exam</button>
       </div>
       <div id="resultCard" class="hidden">
-        <div class="card text-center">
+        <div class="card text-center" id="resultSummaryCard">
+          <div id="medalDisplay"></div>
           <h1 id="scoreHeading"></h1>
+          <div id="rankText"></div>
           <p class="text-muted">Here's how you did, question by question.</p>
         </div>
         <div id="reviewList"></div>
@@ -171,10 +188,26 @@
       }, 1000);
     }
 
-    function renderReview(score, totalMarks, review) {
+    function medalFor(rank) {
+      if (rank === 1) return { icon: "🥇", label: "1st", cls: "gold", tile: "result-card-medal-1" };
+      if (rank === 2) return { icon: "🥈", label: "2nd", cls: "silver", tile: "result-card-medal-2" };
+      if (rank === 3) return { icon: "🥉", label: "3rd", cls: "bronze", tile: "result-card-medal-3" };
+      return null;
+    }
+
+    function renderReview(score, totalMarks, review, rank, totalParticipants, celebrate) {
       document.getElementById("examCard").classList.add("hidden");
       document.getElementById("resultCard").classList.remove("hidden");
       document.getElementById("scoreHeading").textContent = `${score} / ${totalMarks}`;
+
+      const medal = medalFor(rank);
+      document.getElementById("resultSummaryCard").className = `card text-center ${medal ? medal.tile : ""}`;
+      document.getElementById("medalDisplay").innerHTML = medal
+        ? `<div class="medal-hero ${celebrate ? "celebrate" : ""}">${medal.icon}</div><p class="medal-message ${medal.cls}">🎉 You ranked ${medal.label} in this exam!</p>`
+        : "";
+      document.getElementById("rankText").innerHTML = rank
+        ? `<p class="text-muted mb-0" style="font-size:13px;">Rank #${rank}${totalParticipants ? ` of ${totalParticipants}` : ""}</p>`
+        : "";
 
       document.getElementById("reviewList").innerHTML = review.map((q, qi) => {
         const correctSet = (q.correct_options || "").split(",");
@@ -212,7 +245,7 @@
       try {
         const data = await Api.request("student", `/student/exam/attempt/${attemptId}/submit`, { method: "POST" });
         clearInterval(timerInterval);
-        renderReview(data.score, data.total_marks, data.review);
+        renderReview(data.score, data.total_marks, data.review, data.rank, data.total_participants, true);
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
@@ -226,7 +259,7 @@
           document.getElementById("loadingText").classList.add("hidden");
           const data = await Api.request("student", `/student/exam/attempt/${reviewAttemptId}/submit`, { method: "POST" });
           document.getElementById("examCard").classList.add("hidden");
-          renderReview(data.score, data.total_marks, data.review);
+          renderReview(data.score, data.total_marks, data.review, data.rank, data.total_participants, false);
           return;
         }
 

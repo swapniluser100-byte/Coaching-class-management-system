@@ -231,6 +231,7 @@ type ExamHistoryRow = {
   starts_at: string | null; ends_at: string | null; duration_minutes: number | null;
   batch_name: string; marks_obtained: number | null; remarks: string | null;
   attempt_id: string | null; attempt_status: string | null;
+  rank: number | null; total_participants: number;
 };
 
 student.get("/exams/history", async (c) => {
@@ -240,7 +241,11 @@ student.get("/exams/history", async (c) => {
        e.starts_at, e.ends_at, e.duration_minutes,
        b.name as batch_name,
        m.marks_obtained, m.remarks,
-       a.id as attempt_id, a.status as attempt_status
+       a.id as attempt_id, a.status as attempt_status,
+       CASE WHEN m.marks_obtained IS NOT NULL THEN
+         (SELECT COUNT(*) + 1 FROM exam_marks m2 WHERE m2.exam_id = e.id AND m2.marks_obtained > m.marks_obtained)
+       END as rank,
+       (SELECT COUNT(*) FROM exam_marks m3 WHERE m3.exam_id = e.id) as total_participants
      FROM exams e
      JOIN batch_students bs ON bs.batch_id = e.batch_id
      JOIN batches b ON b.id = e.batch_id
@@ -364,10 +369,26 @@ student.post("/exam/attempt/:attempt_id/submit", async (c) => {
 
   const review = questions.map((q) => ({ ...q, your_answer: answerByQuestion[q.id as string] || "" }));
 
+  const score = (finalized as { score: number | null } | undefined)?.score ?? null;
+  let rank: number | null = null;
+  let totalParticipants = 0;
+  if (score !== null) {
+    const rankRow = await c.env.DB.prepare(
+      "SELECT COUNT(*) + 1 as rank FROM exam_marks WHERE exam_id = ? AND marks_obtained > ?"
+    ).bind(attempt.exam_id, score).first<{ rank: number }>();
+    rank = rankRow?.rank ?? null;
+    const countRow = await c.env.DB.prepare(
+      "SELECT COUNT(*) as total FROM exam_marks WHERE exam_id = ?"
+    ).bind(attempt.exam_id).first<{ total: number }>();
+    totalParticipants = countRow?.total ?? 0;
+  }
+
   return ok(c, {
-    score: (finalized as { score: number | null } | undefined)?.score ?? null,
+    score,
     total_marks: exam?.total_marks,
     review,
+    rank,
+    total_participants: totalParticipants,
   });
 });
 

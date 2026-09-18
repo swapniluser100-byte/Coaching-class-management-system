@@ -7,6 +7,11 @@
 <link rel="stylesheet" href="../shared/css/styles.css" />
 <style>
   .exam-tile-pending { border-color: var(--color-primary); border-left-width: 3px; background: color-mix(in srgb, var(--color-primary) 6%, white); }
+  .exam-tile-medal-1 { border-color: #d4af37; border-left-width: 3px; background: color-mix(in srgb, #d4af37 8%, white); }
+  .exam-tile-medal-2 { border-color: #9aa0a6; border-left-width: 3px; background: color-mix(in srgb, #9aa0a6 8%, white); }
+  .exam-tile-medal-3 { border-color: #cd7f32; border-left-width: 3px; background: color-mix(in srgb, #cd7f32 8%, white); }
+  .medal-icon { font-size: 22px; line-height: 1; }
+  .rank-text { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -38,13 +43,35 @@
       return r.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`;
     }
 
+    function medalFor(rank) {
+      if (rank === 1) return "🥇";
+      if (rank === 2) return "🥈";
+      if (rank === 3) return "🥉";
+      return null;
+    }
+
     function marksBlock(r) {
       if (isPending(r)) {
         if (r.window_status === "upcoming") return `<span class="badge badge-muted">Opens ${new Date(r.starts_at).toLocaleString()}</span>`;
         return r.attempt_status === "in_progress" ? `<span class="badge badge-warning">In progress</span>` : `<span class="badge badge-success">Open now</span>`;
       }
-      if (r.marks_obtained != null) return `<div class="value" style="font-size:20px;">${r.marks_obtained}/${r.total_marks}</div>`;
+      if (r.marks_obtained != null) {
+        const medal = medalFor(r.rank);
+        return `
+          <div class="value" style="font-size:20px;">${medal ? `<span class="medal-icon">${medal}</span> ` : ""}${r.marks_obtained}/${r.total_marks}</div>
+          ${r.rank ? `<div class="rank-text">Rank #${r.rank}${r.total_participants ? ` of ${r.total_participants}` : ""}</div>` : ""}
+        `;
+      }
       return `<span class="text-muted">Pending</span>`;
+    }
+
+    function tileClass(r) {
+      if (isPending(r)) return "exam-tile-pending";
+      const medal = medalFor(r.rank);
+      if (medal === "🥇") return "exam-tile-medal-1";
+      if (medal === "🥈") return "exam-tile-medal-2";
+      if (medal === "🥉") return "exam-tile-medal-3";
+      return "";
     }
 
     function actionButton(r) {
@@ -66,7 +93,7 @@
           return;
         }
         wrap.innerHTML = exams.map((r) => `
-          <div class="card ${isPending(r) ? "exam-tile-pending" : ""}">
+          <div class="card ${tileClass(r)}">
             <div class="flex-between" style="align-items:flex-start; flex-wrap:wrap; gap:12px;">
               <div>
                 <h3 class="mb-0">${escapeHtml(r.exam_name)}</h3>
