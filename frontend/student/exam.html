@@ -20,6 +20,12 @@
   .result-card-medal-1 { border-color: #d4af37; background: color-mix(in srgb, #d4af37 6%, white); }
   .result-card-medal-2 { border-color: #9aa0a6; background: color-mix(in srgb, #9aa0a6 6%, white); }
   .result-card-medal-3 { border-color: #cd7f32; background: color-mix(in srgb, #cd7f32 6%, white); }
+
+  .top-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
+  .top-row:last-child { border-bottom: none; }
+  .top-row-medal { font-size: 22px; width: 28px; text-align: center; flex-shrink: 0; }
+  .top-row-name { flex: 1; font-weight: 600; }
+  .top-row-marks { font-weight: 700; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -43,6 +49,10 @@
         </form>
       </div>
       <div class="card hidden" id="resultCard"></div>
+      <div class="card hidden" id="topCard">
+        <h2>🏆 Top 3</h2>
+        <div id="topList"></div>
+      </div>
     `);
 
     function medalFor(rank) {
@@ -52,12 +62,45 @@
       return null;
     }
 
+    const PLACEHOLDER_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23e2e6ef'/%3E%3C/svg%3E";
+
+    async function renderTopStudents(topStudents) {
+      const topCard = document.getElementById("topCard");
+      if (!topStudents || topStudents.length === 0) {
+        topCard.classList.add("hidden");
+        return;
+      }
+      topCard.classList.remove("hidden");
+      document.getElementById("topList").innerHTML = topStudents.map((s, i) => {
+        const medal = medalFor(s.rank);
+        return `
+          <div class="top-row">
+            <img class="avatar" id="topPhoto${i}" style="width:44px; height:44px;" src="${PLACEHOLDER_AVATAR}" />
+            <span class="top-row-medal">${medal ? medal.icon : `#${s.rank}`}</span>
+            <span class="top-row-name">${escapeHtml(s.name)}</span>
+            <span class="top-row-marks">${s.marks_obtained}</span>
+          </div>
+        `;
+      }).join("");
+
+      topStudents.forEach(async (s, i) => {
+        if (!s.photo_url) return;
+        try {
+          const res = await Api.request("student", `/photos/${s.photo_url}`, { raw: true });
+          const blob = await res.blob();
+          const img = document.getElementById(`topPhoto${i}`);
+          if (img) img.src = URL.createObjectURL(blob);
+        } catch {}
+      });
+    }
+
     document.getElementById("examForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const alertBox = document.getElementById("alertBox");
       const resultCard = document.getElementById("resultCard");
       alertBox.innerHTML = "";
       resultCard.classList.add("hidden");
+      document.getElementById("topCard").classList.add("hidden");
       try {
         const data = await Api.request("student", "/student/exam/view", {
           method: "POST",
@@ -96,6 +139,7 @@
           ${data.remarks ? `<p class="mt-16"><strong>Remarks:</strong> ${escapeHtml(data.remarks)}</p>` : ""}
           ${data.marks_obtained == null ? `<div class="alert alert-info mt-16">Marks for this exam haven't been uploaded yet.</div>` : ""}
         `;
+        await renderTopStudents(data.top_students);
       } catch (err) {
         showAlert(alertBox, err.message);
       }

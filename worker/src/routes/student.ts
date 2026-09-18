@@ -161,6 +161,14 @@ student.post("/exam/view", async (c) => {
     rank = rankRow?.rank ?? null;
   }
 
+  const { results: topStudents } = await c.env.DB.prepare(
+    `SELECT s.name, s.photo_url, em.marks_obtained
+     FROM exam_marks em JOIN students s ON s.id = em.student_id
+     WHERE em.exam_id = ?
+     ORDER BY em.marks_obtained DESC
+     LIMIT 3`
+  ).bind(exam.id).all<{ name: string; photo_url: string | null; marks_obtained: number }>();
+
   return ok(c, {
     exam: {
       exam_name: exam.exam_name,
@@ -173,6 +181,7 @@ student.post("/exam/view", async (c) => {
     topper_marks: stats?.topper_marks ?? null,
     rank,
     total_students: stats?.total_entries ?? 0,
+    top_students: topStudents.map((s, i) => ({ ...s, rank: i + 1 })),
   });
 });
 
