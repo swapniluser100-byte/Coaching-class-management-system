@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Exam Marks · Student</title>
 <link rel="stylesheet" href="../shared/css/styles.css" />
+<style>
+  .medal-hero { font-size: 56px; line-height: 1; margin-bottom: 2px; }
+  .medal-hero.celebrate { animation: medal-pop 0.6s cubic-bezier(.34, 1.56, .64, 1); }
+  @keyframes medal-pop {
+    0% { transform: scale(0) rotate(-25deg); opacity: 0; }
+    60% { transform: scale(1.25) rotate(10deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); }
+  }
+  .medal-message { font-weight: 700; font-size: 16px; margin: 2px 0 0; }
+  .medal-message.gold { color: #b8860b; }
+  .medal-message.silver { color: #6b7280; }
+  .medal-message.bronze { color: #a0522d; }
+  .result-card-medal-1 { border-color: #d4af37; background: color-mix(in srgb, #d4af37 6%, white); }
+  .result-card-medal-2 { border-color: #9aa0a6; background: color-mix(in srgb, #9aa0a6 6%, white); }
+  .result-card-medal-3 { border-color: #cd7f32; background: color-mix(in srgb, #cd7f32 6%, white); }
+</style>
 </head>
 <body>
   <script src="../shared/js/config.js"></script>
@@ -29,6 +45,13 @@
       <div class="card hidden" id="resultCard"></div>
     `);
 
+    function medalFor(rank) {
+      if (rank === 1) return { icon: "🥇", label: "1st", cls: "gold", tile: "result-card-medal-1" };
+      if (rank === 2) return { icon: "🥈", label: "2nd", cls: "silver", tile: "result-card-medal-2" };
+      if (rank === 3) return { icon: "🥉", label: "3rd", cls: "bronze", tile: "result-card-medal-3" };
+      return null;
+    }
+
     document.getElementById("examForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const alertBox = document.getElementById("alertBox");
@@ -40,17 +63,25 @@
           method: "POST",
           body: { exam_code: document.getElementById("examCode").value.trim() },
         });
+        const medal = medalFor(data.rank);
         resultCard.classList.remove("hidden");
+        resultCard.className = `card ${medal ? medal.tile : ""}`;
         resultCard.innerHTML = `
+          ${medal ? `
+            <div class="text-center mb-16">
+              <div class="medal-hero celebrate">${medal.icon}</div>
+              <p class="medal-message ${medal.cls}">🎉 You ranked ${medal.label} in this exam!</p>
+            </div>
+          ` : ""}
           <h2>${escapeHtml(data.exam.exam_name)}</h2>
           <p class="text-muted">${data.exam.exam_date} · Total marks: ${data.exam.total_marks}</p>
           <div class="grid grid-2 mt-16">
-            <div class="stat-tile card">
+            <div class="stat-tile card ${medal ? medal.tile : ""}">
               <div class="value">${data.marks_obtained ?? "—"}</div>
               <div class="label">Your Marks</div>
             </div>
-            <div class="stat-tile card">
-              <div class="value">${data.rank ?? "—"}</div>
+            <div class="stat-tile card ${medal ? medal.tile : ""}">
+              <div class="value">${medal ? `${medal.icon} ` : ""}${data.rank ?? "—"}</div>
               <div class="label">Rank ${data.total_students ? `(of ${data.total_students})` : ""}</div>
             </div>
             <div class="stat-tile card">
