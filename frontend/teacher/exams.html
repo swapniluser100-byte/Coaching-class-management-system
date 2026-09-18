@@ -34,9 +34,10 @@
           </div>
         </div>
         <p class="text-muted mt-8" style="font-size:12px;">CSV columns: <code>phone, name, marks_obtained, remarks</code>. Matched by phone number.</p>
+        <p class="text-muted mt-8" style="font-size:12px;">Ranked by marks, highest first, once saved.</p>
         <div class="table-wrap mt-16">
           <table>
-            <thead><tr><th>Student</th><th>Marks</th><th>Remarks</th></tr></thead>
+            <thead><tr><th>Rank</th><th>Student</th><th>Marks</th><th>Remarks</th></tr></thead>
             <tbody id="marksBody"></tbody>
           </table>
         </div>
@@ -54,6 +55,19 @@
         exams.map((e) => `<option value="${e.id}">${escapeHtml(e.exam_name)} (${e.exam_code})</option>`).join("");
     }
 
+    function medalFor(rank) {
+      if (rank === 1) return "🥇";
+      if (rank === 2) return "🥈";
+      if (rank === 3) return "🥉";
+      return null;
+    }
+
+    function rankCell(rank) {
+      if (rank == null) return `<span class="text-muted">—</span>`;
+      const medal = medalFor(rank);
+      return medal ? `<span class="medal-icon" style="font-size:20px;">${medal}</span>` : `#${rank}`;
+    }
+
     async function loadMarks(examId) {
       currentExam = exams.find((e) => e.id === examId);
       if (!currentExam) return;
@@ -69,15 +83,32 @@
       const existingMarks = {};
       existingMarksList.forEach((m) => { existingMarks[m.student_id] = m; });
 
-      const tbody = document.getElementById("marksBody");
-      tbody.innerHTML = students.map((s) => {
+      // Ranked by marks (highest first); students without marks yet sort to
+      // the bottom, alphabetically, since they can't be ranked.
+      const rows = students.map((s) => {
         const existing = existingMarks[s.student_id];
-        return `<tr data-student="${s.student_id}">
+        return { student: s, marks_obtained: existing ? existing.marks_obtained : null, remarks: existing && existing.remarks ? existing.remarks : "" };
+      });
+      rows.sort((a, b) => {
+        if (a.marks_obtained == null && b.marks_obtained == null) return a.student.name.localeCompare(b.student.name);
+        if (a.marks_obtained == null) return 1;
+        if (b.marks_obtained == null) return -1;
+        return b.marks_obtained - a.marks_obtained;
+      });
+      rows.forEach((r, i) => {
+        if (r.marks_obtained == null) { r.rank = null; return; }
+        r.rank = i > 0 && rows[i - 1].marks_obtained === r.marks_obtained ? rows[i - 1].rank : i + 1;
+      });
+
+      const tbody = document.getElementById("marksBody");
+      tbody.innerHTML = rows.map(({ student: s, marks_obtained, remarks, rank }) => `
+        <tr data-student="${s.student_id}">
+          <td>${rankCell(rank)}</td>
           <td>${escapeHtml(s.name)}</td>
-          <td><input type="number" class="marksInput" min="0" max="${currentExam.total_marks}" value="${existing ? existing.marks_obtained : ""}" /></td>
-          <td><input type="text" class="remarksInput" value="${existing && existing.remarks ? escapeHtml(existing.remarks) : ""}" /></td>
-        </tr>`;
-      }).join("");
+          <td><input type="number" class="marksInput" min="0" max="${currentExam.total_marks}" value="${marks_obtained ?? ""}" /></td>
+          <td><input type="text" class="remarksInput" value="${escapeHtml(remarks)}" /></td>
+        </tr>
+      `).join("");
     }
 
     document.getElementById("examSelect").addEventListener("change", (e) => {
@@ -99,6 +130,7 @@
 
       try {
         await Api.request("tutor", "/tutor/exam/upload-marks", { method: "POST", body: { exam_id: currentExam.id, marks } });
+        await loadMarks(currentExam.id);
         showAlert(document.getElementById("alertBox"), `Saved marks for ${marks.length} students.`, "success");
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
