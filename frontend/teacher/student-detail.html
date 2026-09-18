@@ -23,14 +23,9 @@
       <div class="grid grid-3" id="feeTiles"></div>
 
       <div class="card">
-        <h2>Total Fee</h2>
-        <div class="flex gap-8" style="align-items:flex-end;">
-          <div style="flex:1;">
-            <label>Total Fee for this student</label>
-            <input id="totalFeeInput" type="number" min="0" step="0.01" placeholder="e.g. 25000" />
-          </div>
-          <button class="btn" id="saveTotalFeeBtn">Save</button>
-        </div>
+        <h2>Fee Breakdown by Batch</h2>
+        <p class="text-muted" style="font-size:12px;">Total fee is the sum of each batch's fee. Batch fees are set by your admin in Manage Batches.</p>
+        <div id="batchFeeList"></div>
       </div>
 
       <div class="card">
@@ -95,13 +90,22 @@
 
       document.getElementById("studentName").textContent = data.student.name;
       document.getElementById("studentSub").textContent = `${data.student.phone}${data.student.class_level ? ` · ${data.student.class_level}` : ""}`;
-      document.getElementById("totalFeeInput").value = data.total_fee ?? "";
 
       const remaining = data.remaining_fee;
       document.getElementById("feeTiles").innerHTML =
-        feeTile(data.total_fee != null ? data.total_fee : "—", "Total Fee") +
+        feeTile(data.total_fee, "Total Fee") +
         feeTile(data.paid_fee, "Paid Fee", "stat-tile-present") +
-        feeTile(remaining != null ? remaining : "—", "Remaining Fee", remaining == null ? "" : remaining > 0 ? "stat-tile-absent" : "stat-tile-present");
+        feeTile(remaining, "Remaining Fee", remaining > 0 ? "stat-tile-absent" : "stat-tile-present");
+
+      const batchFeeList = document.getElementById("batchFeeList");
+      batchFeeList.innerHTML = data.batch_fees.length === 0
+        ? `<p class="text-muted mb-0">Not currently enrolled in any batch.</p>`
+        : data.batch_fees.map((b) => `
+            <p class="flex-between mb-0 mt-8" style="font-size:14px;">
+              <span>${escapeHtml(b.batch_name)}</span>
+              <strong>${b.fee_amount != null ? b.fee_amount : `<span class="text-muted" style="font-weight:400;">Not set</span>`}</strong>
+            </p>
+          `).join("");
 
       const tbody = document.getElementById("paymentsBody");
       if (data.payments.length === 0) {
@@ -118,19 +122,6 @@
         </tr>
       `).join("");
     }
-
-    document.getElementById("saveTotalFeeBtn").addEventListener("click", async () => {
-      const alertBox = document.getElementById("alertBox");
-      const val = document.getElementById("totalFeeInput").value;
-      const total_fee = val === "" ? null : parseFloat(val);
-      try {
-        await Api.request("tutor", `/fees/student/${studentId}/total`, { method: "POST", body: { total_fee } });
-        await loadDetail();
-        showAlert(alertBox, "Total fee saved.", "success");
-      } catch (err) {
-        showAlert(alertBox, err.message);
-      }
-    });
 
     document.getElementById("addPaymentBtn").addEventListener("click", async () => {
       const alertBox = document.getElementById("alertBox");

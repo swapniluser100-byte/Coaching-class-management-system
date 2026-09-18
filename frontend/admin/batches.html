@@ -38,6 +38,9 @@
             </div>
             <label>Tutor</label>
             <select id="tutorId"><option value="">— unassigned —</option></select>
+            <label>Fee Amount</label>
+            <input id="feeAmount" type="number" min="0" step="0.01" placeholder="e.g. 15000" />
+            <p class="text-muted mb-0" style="font-size:12px;">A student's total fee is the sum of this across every batch they're in.</p>
             <div class="field-row">
               <div>
                 <label>Schedule Days</label>
@@ -74,8 +77,8 @@
           <h2>Batches</h2>
           <div class="table-wrap mt-16">
             <table>
-              <thead><tr><th>Name</th><th>Class</th><th>Tutor</th><th>Strength</th><th>Geo-fence</th><th>Status</th><th></th></tr></thead>
-              <tbody id="batchesBody"><tr><td colspan="7" class="text-muted">Loading…</td></tr></tbody>
+              <thead><tr><th>Name</th><th>Class</th><th>Tutor</th><th>Strength</th><th>Fee</th><th>Geo-fence</th><th>Status</th><th></th></tr></thead>
+              <tbody id="batchesBody"><tr><td colspan="8" class="text-muted">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -96,7 +99,7 @@
       allBatches = await Api.request("admin", "/admin/batches");
       const tbody = document.getElementById("batchesBody");
       if (allBatches.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-muted">No batches yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-muted">No batches yet.</td></tr>`;
         return;
       }
       tbody.innerHTML = allBatches.map((b) => `
@@ -105,6 +108,7 @@
           <td>${escapeHtml(b.class_level)}</td>
           <td>${escapeHtml(b.tutor_name || "—")}</td>
           <td>${b.strength}</td>
+          <td>${b.fee_amount != null ? b.fee_amount : `<span class="text-muted">—</span>`}</td>
           <td>${b.classroom_lat != null ? `<span class="badge badge-success">Set (${b.geo_radius_m}m)</span>` : `<span class="badge badge-muted">Not set</span>`}</td>
           <td>${b.active ? `<span class="badge badge-success">Active</span>` : `<span class="badge badge-danger">Inactive</span>`}</td>
           <td>
@@ -141,6 +145,7 @@
       document.getElementById("subject").value = b.subject || "";
       document.getElementById("classLevel").value = b.class_level;
       document.getElementById("tutorId").value = b.tutor_id || "";
+      document.getElementById("feeAmount").value = b.fee_amount ?? "";
       document.getElementById("scheduleDays").value = b.schedule_days || "";
       document.getElementById("scheduleTime").value = b.schedule_time || "";
       document.getElementById("lat").value = b.classroom_lat ?? "";
@@ -164,6 +169,7 @@
         subject: document.getElementById("subject").value.trim() || undefined,
         class_level: document.getElementById("classLevel").value,
         tutor_id: document.getElementById("tutorId").value || undefined,
+        fee_amount: document.getElementById("feeAmount").value ? parseFloat(document.getElementById("feeAmount").value) : undefined,
         schedule_days: document.getElementById("scheduleDays").value.trim() || undefined,
         schedule_time: document.getElementById("scheduleTime").value.trim() || undefined,
         classroom_lat: document.getElementById("lat").value ? parseFloat(document.getElementById("lat").value) : undefined,

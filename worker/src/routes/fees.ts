@@ -28,37 +28,35 @@ fees.get("/student/:id", async (c) => {
   if (!(await assertStudentAccess(c, studentId))) return fail(c, "Student not found", 404);
 
   const student = await c.env.DB.prepare(
-    "SELECT id, name, phone, class_level, total_fee FROM students WHERE id = ?"
-  ).bind(studentId).first<{ id: string; name: string; phone: string; class_level: string | null; total_fee: number | null }>();
+    "SELECT id, name, phone, class_level FROM students WHERE id = ?"
+  ).bind(studentId).first<{ id: string; name: string; phone: string; class_level: string | null }>();
   if (!student) return fail(c, "Student not found", 404);
+
+  // Total fee is derived, never stored: the sum of every batch's fee_amount
+  // for the batches this student is currently in. A batch with no fee
+  // configured contributes 0 but is still listed, so the breakdown makes
+  // clear why the total looks low.
+  const { results: batchFees } = await c.env.DB.prepare(
+    `SELECT b.id as batch_id, b.name as batch_name, b.fee_amount
+     FROM batch_students bs JOIN batches b ON b.id = bs.batch_id
+     WHERE bs.student_id = ? ORDER BY b.name`
+  ).bind(studentId).all<{ batch_id: string; batch_name: string; fee_amount: number | null }>();
 
   const { results: payments } = await c.env.DB.prepare(
     "SELECT id, amount, payment_date, mode, notes FROM fee_payments WHERE student_id = ? ORDER BY payment_date DESC, created_at DESC"
   ).bind(studentId).all<{ id: string; amount: number; payment_date: string; mode: string | null; notes: string | null }>();
 
+  const totalFee = batchFees.reduce((sum, b) => sum + (b.fee_amount ?? 0), 0);
   const paidFee = payments.reduce((sum, p) => sum + p.amount, 0);
-  const totalFee = student.total_fee;
 
   return ok(c, {
     student: { id: student.id, name: student.name, phone: student.phone, class_level: student.class_level },
+    batch_fees: batchFees,
     total_fee: totalFee,
     paid_fee: paidFee,
-    remaining_fee: totalFee != null ? totalFee - paidFee : null,
+    remaining_fee: totalFee - paidFee,
     payments,
   });
-});
-
-fees.post("/student/:id/total", async (c) => {
-  const studentId = c.req.param("id");
-  if (!(await assertStudentAccess(c, studentId))) return fail(c, "Student not found", 404);
-
-  const { total_fee } = await c.req.json<{ total_fee: number | null }>();
-  if (total_fee !== null && (typeof total_fee !== "number" || total_fee < 0)) {
-    return fail(c, "total_fee must be a non-negative number or null", 400);
-  }
-
-  await c.env.DB.prepare("UPDATE students SET total_fee = ? WHERE id = ?").bind(total_fee, studentId).run();
-  return ok(c, { student_id: studentId, total_fee });
 });
 
 fees.post("/student/:id/payments", async (c) => {

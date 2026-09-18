@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS batches (
   classroom_lat  REAL,          -- registered classroom geo-fence center
   classroom_long REAL,
   geo_radius_m   INTEGER NOT NULL DEFAULT 100,
+  fee_amount     REAL,          -- this batch's fee; a student's total fee is the sum across every batch they're in
   active         INTEGER NOT NULL DEFAULT 1,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -61,7 +62,6 @@ CREATE TABLE IF NOT EXISTS students (
   pin_hash            TEXT,       -- optional 4-digit PIN (admin-set) for login-free attendance marking
   pin_failed_attempts INTEGER NOT NULL DEFAULT 0, -- locks after 5; admin reset required
   active              INTEGER NOT NULL DEFAULT 1,
-  total_fee           REAL,       -- agreed course fee for this student; paid/remaining are derived from fee_payments
   created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -261,9 +261,10 @@ CREATE TABLE IF NOT EXISTS vendor_users (
 );
 
 -- ---------------------------------------------------------------------------
--- fee_payments — one row per fee payment recorded against a student. Paid
--- and remaining fee are always derived by summing these, never stored, so
--- there's a single source of truth (students.total_fee minus this sum).
+-- fee_payments — one row per fee payment recorded against a student. Total
+-- fee is the sum of fee_amount across every batch the student is in
+-- (batches.fee_amount), paid fee is the sum of these rows, and remaining is
+-- the difference -- none of the three are stored, only ever derived.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS fee_payments (
   id           TEXT PRIMARY KEY,

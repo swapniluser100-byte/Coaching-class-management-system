@@ -217,18 +217,21 @@ admin.post("/batch/create", async (c) => {
   const b = await c.req.json<{
     name: string; subject?: string; class_level: string; tutor_id?: string;
     schedule_days?: string; schedule_time?: string;
-    classroom_lat?: number; classroom_long?: number; geo_radius_m?: number;
+    classroom_lat?: number; classroom_long?: number; geo_radius_m?: number; fee_amount?: number;
   }>();
   if (!b.name || !b.class_level) return fail(c, "name and class_level are required", 400);
+  if (b.fee_amount !== undefined && b.fee_amount !== null && (typeof b.fee_amount !== "number" || b.fee_amount < 0)) {
+    return fail(c, "fee_amount must be a non-negative number", 400);
+  }
 
   const id = newId("batch");
   await c.env.DB.prepare(
-    `INSERT INTO batches (id, name, subject, class_level, tutor_id, schedule_days, schedule_time, classroom_lat, classroom_long, geo_radius_m)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO batches (id, name, subject, class_level, tutor_id, schedule_days, schedule_time, classroom_lat, classroom_long, geo_radius_m, fee_amount)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     id, b.name, b.subject || null, b.class_level, b.tutor_id || null,
     b.schedule_days || null, b.schedule_time || null,
-    b.classroom_lat ?? null, b.classroom_long ?? null, b.geo_radius_m ?? 100
+    b.classroom_lat ?? null, b.classroom_long ?? null, b.geo_radius_m ?? 100, b.fee_amount ?? null
   ).run();
 
   return ok(c, { id }, 201);
@@ -239,8 +242,12 @@ admin.post("/batch/update", async (c) => {
     id: string; name?: string; subject?: string; class_level?: string; tutor_id?: string;
     schedule_days?: string; schedule_time?: string;
     classroom_lat?: number; classroom_long?: number; geo_radius_m?: number; active?: boolean;
+    fee_amount?: number | null;
   }>();
   if (!b.id) return fail(c, "id is required", 400);
+  if (b.fee_amount !== undefined && b.fee_amount !== null && (typeof b.fee_amount !== "number" || b.fee_amount < 0)) {
+    return fail(c, "fee_amount must be a non-negative number", 400);
+  }
 
   await c.env.DB.prepare(
     `UPDATE batches SET
@@ -248,13 +255,15 @@ admin.post("/batch/update", async (c) => {
        tutor_id = COALESCE(?, tutor_id), schedule_days = COALESCE(?, schedule_days),
        schedule_time = COALESCE(?, schedule_time), classroom_lat = COALESCE(?, classroom_lat),
        classroom_long = COALESCE(?, classroom_long), geo_radius_m = COALESCE(?, geo_radius_m),
-       active = COALESCE(?, active)
+       active = COALESCE(?, active),
+       fee_amount = CASE WHEN ? = 1 THEN ? ELSE fee_amount END
      WHERE id = ?`
   ).bind(
     b.name ?? null, b.subject ?? null, b.class_level ?? null, b.tutor_id ?? null,
     b.schedule_days ?? null, b.schedule_time ?? null, b.classroom_lat ?? null,
     b.classroom_long ?? null, b.geo_radius_m ?? null,
     b.active === undefined ? null : (b.active ? 1 : 0),
+    b.fee_amount !== undefined ? 1 : 0, b.fee_amount ?? null,
     b.id
   ).run();
 
