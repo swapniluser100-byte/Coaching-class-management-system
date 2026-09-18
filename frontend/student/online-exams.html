@@ -3,8 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Online Exams · Student</title>
+<title>Exam History · Student</title>
 <link rel="stylesheet" href="../shared/css/styles.css" />
+<style>
+  .exam-row-pending td { background: color-mix(in srgb, var(--color-primary) 7%, white); }
+  .exam-row-pending td:first-child { border-left: 3px solid var(--color-primary); }
+</style>
 </head>
 <body>
   <script src="../shared/js/config.js"></script>
@@ -15,57 +19,72 @@
   <script>
     requireStudentAuth();
     renderStudentShell("online-exams.html", `
-      <h1>Online Exams</h1>
+      <h1>Exam History</h1>
       <div id="alertBox"></div>
-      <div id="examsList"><p class="text-muted">Loading…</p></div>
+      <div id="examsWrap"><p class="text-muted">Loading…</p></div>
     `);
 
-    function statusBadge(exam) {
-      if (exam.attempt_status === "submitted") {
-        return `<span class="badge badge-success">Submitted · ${exam.attempt_score}/${exam.total_marks}</span>`;
-      }
-      if (exam.window_status === "upcoming") return `<span class="badge badge-muted">Opens ${new Date(exam.starts_at).toLocaleString()}</span>`;
-      if (exam.window_status === "closed") return `<span class="badge badge-danger">Window closed</span>`;
-      if (exam.attempt_status === "in_progress") return `<span class="badge badge-warning">In progress</span>`;
-      return `<span class="badge badge-success">Open now</span>`;
+    function isPending(r) {
+      return r.exam_type === "online" && r.attempt_status !== "submitted" && (r.window_status === "upcoming" || r.window_status === "active");
     }
 
-    function actionButton(exam) {
-      if (exam.attempt_status === "submitted") {
-        return `<a class="btn btn-secondary btn-sm" href="take-exam.html?exam_id=${exam.id}&attempt_id=${exam.attempt_id}&review=1">${iconSvg("check-circle")} View Result</a>`;
+    function dateTimeCell(r) {
+      if (r.exam_type === "online") {
+        return new Date(r.starts_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
       }
-      if (exam.window_status === "active") {
-        return `<a class="btn btn-sm" href="take-exam.html?exam_id=${exam.id}">${iconSvg("play")} ${exam.attempt_status === "in_progress" ? "Resume Exam" : "Start Exam"}</a>`;
+      return new Date(`${r.exam_date}T00:00:00`).toLocaleDateString(undefined, { dateStyle: "medium" });
+    }
+
+    function typeBadge(r) {
+      return r.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`;
+    }
+
+    function marksCell(r) {
+      if (isPending(r)) {
+        if (r.window_status === "upcoming") return `<span class="badge badge-muted">Opens ${new Date(r.starts_at).toLocaleString()}</span>`;
+        return r.attempt_status === "in_progress" ? `<span class="badge badge-warning">In progress</span>` : `<span class="badge badge-success">Open now</span>`;
       }
-      return "";
+      if (r.marks_obtained != null) return `<strong>${r.marks_obtained}/${r.total_marks}</strong>`;
+      return `<span class="text-muted">Pending</span>`;
+    }
+
+    function actionCell(r) {
+      if (isPending(r) && r.window_status === "active") {
+        return `<a class="btn btn-sm" href="take-exam.html?exam_id=${r.exam_id}">${iconSvg("play")} ${r.attempt_status === "in_progress" ? "Resume" : "Start"}</a>`;
+      }
+      if (r.exam_type === "online" && r.attempt_status === "submitted") {
+        return `<a class="btn btn-secondary btn-sm" href="take-exam.html?exam_id=${r.exam_id}&attempt_id=${r.attempt_id}&review=1">${iconSvg("check-circle")} View Details</a>`;
+      }
+      return `<span class="text-muted">—</span>`;
     }
 
     (async () => {
       try {
-        const exams = await Api.request("student", "/student/exams/online");
-        const container = document.getElementById("examsList");
+        const exams = await Api.request("student", "/student/exams/history");
+        const wrap = document.getElementById("examsWrap");
         if (exams.length === 0) {
-          container.innerHTML = `<p class="text-muted">No online exams scheduled for your batches yet.</p>`;
+          wrap.innerHTML = `<p class="text-muted">No exams yet.</p>`;
           return;
         }
-        container.innerHTML = exams.map((e) => `
-          <div class="card">
-            <div class="flex-between" style="align-items:flex-start;">
-              <div>
-                <h3 class="mb-0">${escapeHtml(e.exam_name)}</h3>
-                <p class="text-muted" style="font-size:13px;">${escapeHtml(e.batch_name)} · Total marks: ${e.total_marks}</p>
-                <p class="text-muted" style="font-size:12px;">
-                  ${iconSvg("clock")} ${new Date(e.starts_at).toLocaleString()} → ${new Date(e.ends_at).toLocaleString()}
-                  (${e.duration_minutes} min once started)
-                </p>
-              </div>
-              <div class="text-center" style="flex-shrink:0;">
-                ${statusBadge(e)}
-                <div class="mt-8">${actionButton(e)}</div>
-              </div>
-            </div>
+        wrap.innerHTML = `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Exam Name</th><th>Date / Time</th><th>Type</th><th>Marks</th><th>Remarks</th><th></th></tr></thead>
+              <tbody>
+                ${exams.map((r) => `
+                  <tr class="${isPending(r) ? "exam-row-pending" : ""}">
+                    <td>${escapeHtml(r.exam_name)}</td>
+                    <td>${dateTimeCell(r)}</td>
+                    <td>${typeBadge(r)}</td>
+                    <td>${marksCell(r)}</td>
+                    <td>${r.remarks ? escapeHtml(r.remarks) : `<span class="text-muted">—</span>`}</td>
+                    <td>${actionCell(r)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
           </div>
-        `).join("");
+        `;
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }

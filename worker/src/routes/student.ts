@@ -220,29 +220,59 @@ async function finalizeAttempt(db: D1Database, attemptId: string) {
   return { ...attempt, status: "submitted", score };
 }
 
-student.get("/exams/online", async (c) => {
+// ---------------------------------------------------------------------------
+// Full exam history — every classroom + online exam for the student's
+// batches, with marks where uploaded/graded. Any online exam still open (or
+// upcoming) and not yet submitted is sorted to the top so the student
+// notices it in time to start; everything else sorts by date, most recent
+// first.
+// ---------------------------------------------------------------------------
+type ExamHistoryRow = {
+  exam_id: string; exam_name: string; exam_type: string; exam_date: string; total_marks: number;
+  starts_at: string | null; ends_at: string | null; duration_minutes: number | null;
+  batch_name: string; marks_obtained: number | null; remarks: string | null;
+  attempt_id: string | null; attempt_status: string | null;
+};
+
+student.get("/exams/history", async (c) => {
   const studentId = c.get("jwtPayload").sub;
   const { results } = await c.env.DB.prepare(
-    `SELECT e.id, e.exam_name, e.exam_date, e.total_marks, e.starts_at, e.ends_at, e.duration_minutes,
+    `SELECT e.id as exam_id, e.exam_name, e.exam_type, e.exam_date, e.total_marks,
+       e.starts_at, e.ends_at, e.duration_minutes,
        b.name as batch_name,
-       a.id as attempt_id, a.status as attempt_status, a.score as attempt_score
+       m.marks_obtained, m.remarks,
+       a.id as attempt_id, a.status as attempt_status
      FROM exams e
      JOIN batch_students bs ON bs.batch_id = e.batch_id
      JOIN batches b ON b.id = e.batch_id
+     LEFT JOIN exam_marks m ON m.exam_id = e.id AND m.student_id = bs.student_id
      LEFT JOIN exam_attempts a ON a.exam_id = e.id AND a.student_id = bs.student_id
-     WHERE e.exam_type = 'online' AND bs.student_id = ?
-     ORDER BY e.starts_at DESC`
-  ).bind(studentId).all<Record<string, unknown>>();
+     WHERE bs.student_id = ?
+     ORDER BY COALESCE(e.starts_at, e.exam_date) DESC`
+  ).bind(studentId).all<ExamHistoryRow>();
 
   const now = Date.now();
   const withStatus = results.map((r) => {
-    let windowStatus = "upcoming";
-    if (r.ends_at && now > new Date(r.ends_at as string).getTime()) windowStatus = "closed";
-    else if (r.starts_at && now >= new Date(r.starts_at as string).getTime()) windowStatus = "active";
+    let windowStatus: string | null = null;
+    if (r.exam_type === "online") {
+      windowStatus = "upcoming";
+      if (r.ends_at && now > new Date(r.ends_at).getTime()) windowStatus = "closed";
+      else if (r.starts_at && now >= new Date(r.starts_at).getTime()) windowStatus = "active";
+    }
     return { ...r, window_status: windowStatus };
   });
 
-  return ok(c, withStatus);
+  // Pending = an online exam that's still actionable (upcoming or open) and
+  // hasn't been submitted yet — these belong at the top, soonest first.
+  const isPending = (r: (typeof withStatus)[number]) =>
+    r.exam_type === "online" && r.attempt_status !== "submitted" && (r.window_status === "upcoming" || r.window_status === "active");
+
+  const pending = withStatus.filter(isPending).sort((a, b) =>
+    new Date(a.starts_at as string).getTime() - new Date(b.starts_at as string).getTime()
+  );
+  const rest = withStatus.filter((r) => !isPending(r));
+
+  return ok(c, [...pending, ...rest]);
 });
 
 student.post("/exam/:exam_id/start", async (c) => {
