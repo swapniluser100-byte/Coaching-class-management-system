@@ -15,10 +15,17 @@ const Branding = (() => {
   // HTML for a top-3 rank badge: the uploaded image if one is set, otherwise
   // the configured emoji/text; null for any other rank. Pages that render
   // ranks should `await Branding.load()` first.
-  function rankIcon(rank) {
+  // With { fill: true } the image stretches to fill its (sized) container
+  // instead of scaling with the surrounding text.
+  function rankIcon(rank, { fill = false } = {}) {
     if (!(rank >= 1 && rank <= 3)) return null;
     const image = rankImages[rank - 1];
-    if (image) return `<img src="${window.API_BASE_URL}${image}" alt="Rank ${rank}" style="height:1.1em;width:auto;vertical-align:-0.2em;" />`;
+    if (image) {
+      const style = fill
+        ? "width:100%;height:100%;object-fit:contain;display:block;"
+        : "height:1.1em;width:auto;vertical-align:-0.2em;";
+      return `<img src="${window.API_BASE_URL}${image}" alt="Rank ${rank}" style="${style}" />`;
+    }
     return String(rankIcons[rank - 1]).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   }
 

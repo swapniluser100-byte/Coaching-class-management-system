@@ -10,8 +10,13 @@
   .exam-tile-medal-1 { border-color: #d4af37; border-left-width: 3px; background: color-mix(in srgb, #d4af37 8%, white); }
   .exam-tile-medal-2 { border-color: #9aa0a6; border-left-width: 3px; background: color-mix(in srgb, #9aa0a6 8%, white); }
   .exam-tile-medal-3 { border-color: #cd7f32; border-left-width: 3px; background: color-mix(in srgb, #cd7f32 8%, white); }
-  .medal-icon { font-size: 22px; line-height: 1; }
+  .exam-tile { display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: stretch; }
+  .exam-rank-cell { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 96px; border-radius: 8px; overflow: hidden; font-weight: 800; font-size: 40px; line-height: 1; color: var(--color-text-muted); }
+  .exam-rank-cell.top { font-size: 64px; }
+  .exam-rank-cell.top > img { width: 100%; height: 100%; }
+  .exam-rank-cell .rank-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
   .rank-text { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+  @media (max-width: 480px) { .exam-tile { grid-template-columns: 84px 1fr; gap: 12px; } .exam-rank-cell { font-size: 32px; } }
 </style>
 </head>
 <body>
@@ -43,11 +48,10 @@
       return r.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`;
     }
 
-    function medalFor(rank) {
-      if (rank === 1) return Branding.rankIcon(1);
-      if (rank === 2) return Branding.rankIcon(2);
-      if (rank === 3) return Branding.rankIcon(3);
-      return null;
+    function rankCell(r) {
+      if (isPending(r) || r.marks_obtained == null || !r.rank) return `<div class="exam-rank-cell">—</div>`;
+      if (r.rank <= 3) return `<div class="exam-rank-cell top">${Branding.rankIcon(r.rank, { fill: true })}</div>`;
+      return `<div class="exam-rank-cell"><div><span class="rank-label">Rank</span>${r.rank}</div></div>`;
     }
 
     function marksBlock(r) {
@@ -56,10 +60,9 @@
         return r.attempt_status === "in_progress" ? `<span class="badge badge-warning">In progress</span>` : `<span class="badge badge-success">Open now</span>`;
       }
       if (r.marks_obtained != null) {
-        const medal = medalFor(r.rank);
         return `
-          <div class="value" style="font-size:20px;">${medal ? `<span class="medal-icon">${medal}</span> ` : ""}${r.marks_obtained}/${r.total_marks}</div>
-          ${r.rank ? `<div class="rank-text">Rank #${r.rank}${r.total_participants ? ` of ${r.total_participants}` : ""}</div>` : ""}
+          <div class="value" style="font-size:20px;">${r.marks_obtained}/${r.total_marks}</div>
+          ${r.rank && r.total_participants ? `<div class="rank-text">Rank ${r.rank} of ${r.total_participants}</div>` : ""}
         `;
       }
       return `<span class="text-muted">Pending</span>`;
@@ -90,17 +93,14 @@
           return;
         }
         wrap.innerHTML = exams.map((r) => `
-          <div class="card ${tileClass(r)}">
-            <div class="flex-between" style="align-items:flex-start; flex-wrap:wrap; gap:12px;">
-              <div>
-                <h3 class="mb-0">${escapeHtml(r.exam_name)}</h3>
-                <p class="text-muted mb-0" style="font-size:13px;">${dateTimeText(r)} · ${typeBadge(r)}</p>
-                ${r.remarks ? `<p class="text-muted mb-0 mt-8" style="font-size:13px;"><strong>Remarks:</strong> ${escapeHtml(r.remarks)}</p>` : ""}
-              </div>
-              <div class="text-center" style="flex-shrink:0;">
-                ${marksBlock(r)}
-                <div class="mt-8">${actionButton(r)}</div>
-              </div>
+          <div class="card exam-tile ${tileClass(r)}">
+            ${rankCell(r)}
+            <div>
+              <h3 class="mb-0">${escapeHtml(r.exam_name)}</h3>
+              <p class="text-muted mb-0" style="font-size:13px;">${dateTimeText(r)} · ${typeBadge(r)}</p>
+              ${r.remarks ? `<p class="text-muted mb-0 mt-8" style="font-size:13px;"><strong>Remarks:</strong> ${escapeHtml(r.remarks)}</p>` : ""}
+              <div class="mt-8">${marksBlock(r)}</div>
+              <div class="mt-8">${actionButton(r)}</div>
             </div>
           </div>
         `).join("");
