@@ -20,6 +20,14 @@
   .exam-rank-cell.top { font-size: 56px; }
   .exam-rank-cell > img { width: 100%; height: 100%; object-fit: contain; }
   .exam-rank-cell .rank-label { display: block; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+  .exam-rank-cell.luck { flex-direction: column; gap: 4px; color: var(--color-primary); }
+  .luck-emoji { font-size: 40px; line-height: 1; display: inline-block; animation: luck-wiggle 1.8s ease-in-out infinite; }
+  .luck-text { font-size: 11px; font-weight: 800; letter-spacing: .03em; line-height: 1.1; }
+  @keyframes luck-wiggle {
+    0%, 100% { transform: rotate(-10deg) scale(1); }
+    50% { transform: rotate(10deg) scale(1.15); }
+  }
+  @media (prefers-reduced-motion: reduce) { .luck-emoji { animation: none; } }
   .exam-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   .exam-status { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .exam-score { font-weight: 700; font-size: 17px; white-space: nowrap; }
@@ -68,6 +76,9 @@
     }
 
     function rankCell(r) {
+      if (isPending(r) && r.window_status === "active") {
+        return `<div class="exam-rank-cell luck"><span class="luck-emoji">🍀</span><span class="luck-text">Best of Luck!</span></div>`;
+      }
       if (!isCompleted(r) || !r.rank) return `<div class="exam-rank-cell"></div>`;
       if (r.rank <= 3) return `<div class="exam-rank-cell top">${Branding.rankIcon(r.rank, { fill: true })}</div>`;
       return `<div class="exam-rank-cell"><div><span class="rank-label">Rank</span>${r.rank}</div></div>`;
