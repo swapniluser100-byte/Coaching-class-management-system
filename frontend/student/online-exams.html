@@ -15,7 +15,6 @@
   .exam-rank-cell.top { font-size: 64px; }
   .exam-rank-cell.top > img { width: 100%; height: 100%; }
   .exam-rank-cell .rank-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
-  .rank-text { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
   @media (max-width: 480px) { .exam-tile { grid-template-columns: 84px 1fr; gap: 12px; } .exam-rank-cell { font-size: 32px; } }
 </style>
 </head>
@@ -62,7 +61,6 @@
       if (r.marks_obtained != null) {
         return `
           <div class="value" style="font-size:20px;">${r.marks_obtained}/${r.total_marks}</div>
-          ${r.rank && r.total_participants ? `<div class="rank-text">Rank ${r.rank} of ${r.total_participants}</div>` : ""}
         `;
       }
       return `<span class="text-muted">Pending</span>`;
