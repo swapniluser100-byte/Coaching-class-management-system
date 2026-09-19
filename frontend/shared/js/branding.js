@@ -9,6 +9,13 @@
 
 const Branding = (() => {
   let loadPromise = null;
+  let rankIcons = ["🥇", "🥈", "🥉"];
+
+  // Icon shown for a top-3 rank (admin-configurable); null for anything else.
+  // Pages that render ranks should `await Branding.load()` first.
+  function rankIcon(rank) {
+    return rank >= 1 && rank <= 3 ? rankIcons[rank - 1] : null;
+  }
 
   function hexShade(hex, amount) {
     const clean = (hex || "").replace("#", "");
@@ -59,6 +66,7 @@ const Branding = (() => {
           applyColor(data.brand_color);
           applyName(data.tuition_name);
           applyLogo(data.logo_url);
+          if (Array.isArray(data.rank_icons) && data.rank_icons.length === 3) rankIcons = data.rank_icons;
           return data;
         })
         .catch(() => ({}));
@@ -66,7 +74,7 @@ const Branding = (() => {
     return loadPromise;
   }
 
-  return { load, applyName, applyColor, applyLogo };
+  return { load, applyName, applyColor, applyLogo, rankIcon };
 })();
 
 Branding.load();

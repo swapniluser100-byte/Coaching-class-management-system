@@ -56,9 +56,9 @@
     `);
 
     function medalFor(rank) {
-      if (rank === 1) return { icon: "🥇", label: "1st", cls: "gold", tile: "result-card-medal-1" };
-      if (rank === 2) return { icon: "🥈", label: "2nd", cls: "silver", tile: "result-card-medal-2" };
-      if (rank === 3) return { icon: "🥉", label: "3rd", cls: "bronze", tile: "result-card-medal-3" };
+      if (rank === 1) return { icon: Branding.rankIcon(1), label: "1st", cls: "gold", tile: "result-card-medal-1" };
+      if (rank === 2) return { icon: Branding.rankIcon(2), label: "2nd", cls: "silver", tile: "result-card-medal-2" };
+      if (rank === 3) return { icon: Branding.rankIcon(3), label: "3rd", cls: "bronze", tile: "result-card-medal-3" };
       return null;
     }
 
@@ -102,6 +102,7 @@
       resultCard.classList.add("hidden");
       document.getElementById("topCard").classList.add("hidden");
       try {
+        await Branding.load();
         const data = await Api.request("student", "/student/exam/view", {
           method: "POST",
           body: { exam_code: document.getElementById("examCode").value.trim() },

@@ -56,9 +56,9 @@
     }
 
     function medalFor(rank) {
-      if (rank === 1) return "🥇";
-      if (rank === 2) return "🥈";
-      if (rank === 3) return "🥉";
+      if (rank === 1) return Branding.rankIcon(1);
+      if (rank === 2) return Branding.rankIcon(2);
+      if (rank === 3) return Branding.rankIcon(3);
       return null;
     }
 
@@ -69,6 +69,7 @@
     }
 
     async function loadMarks(examId) {
+      await Branding.load();
       currentExam = exams.find((e) => e.id === examId);
       if (!currentExam) return;
       document.getElementById("marksCard").classList.remove("hidden");

@@ -44,9 +44,9 @@
     }
 
     function medalFor(rank) {
-      if (rank === 1) return "🥇";
-      if (rank === 2) return "🥈";
-      if (rank === 3) return "🥉";
+      if (rank === 1) return Branding.rankIcon(1);
+      if (rank === 2) return Branding.rankIcon(2);
+      if (rank === 3) return Branding.rankIcon(3);
       return null;
     }
 
@@ -67,11 +67,7 @@
 
     function tileClass(r) {
       if (isPending(r)) return "exam-tile-pending";
-      const medal = medalFor(r.rank);
-      if (medal === "🥇") return "exam-tile-medal-1";
-      if (medal === "🥈") return "exam-tile-medal-2";
-      if (medal === "🥉") return "exam-tile-medal-3";
-      return "";
+      return r.rank >= 1 && r.rank <= 3 ? `exam-tile-medal-${r.rank}` : "";
     }
 
     function actionButton(r) {
@@ -86,6 +82,7 @@
 
     (async () => {
       try {
+        await Branding.load();
         const exams = await Api.request("student", "/student/exams/history");
         const wrap = document.getElementById("examsWrap");
         if (exams.length === 0) {

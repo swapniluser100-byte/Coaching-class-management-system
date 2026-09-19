@@ -39,6 +39,16 @@
         </div>
       </div>
       <div class="card">
+        <h2>Rank Icons</h2>
+        <p>Shown next to the top 3 ranks on exam results and mark sheets. Use an emoji or a short text (up to 8 characters). Leave blank to use the default medal.</p>
+        <div class="grid grid-3">
+          <div><label>1st Rank</label><input id="rankIcon1" maxlength="16" placeholder="🥇" /></div>
+          <div><label>2nd Rank</label><input id="rankIcon2" maxlength="16" placeholder="🥈" /></div>
+          <div><label>3rd Rank</label><input id="rankIcon3" maxlength="16" placeholder="🥉" /></div>
+        </div>
+        <button class="btn mt-16" id="saveRankIconsBtn">Save Rank Icons</button>
+      </div>
+      <div class="card">
         <h2>Plan / Renewal</h2>
         <p>Set by your service provider — shown here for your information, and as a banner in this console when the date is near or past. It never restricts access.</p>
         <div id="renewalReadonly"></div>
@@ -85,6 +95,7 @@
         document.getElementById("brandColor").value = settings.brand_color;
         document.getElementById("brandColorHex").value = settings.brand_color;
         refreshLogoPreview(settings.logo_url);
+        settings.rank_icons.forEach((icon, i) => { document.getElementById(`rankIcon${i + 1}`).value = icon; });
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
       }
@@ -154,6 +165,17 @@
         Branding.applyColor(brand_color);
         Branding.applyName(tuition_name);
         showAlert(alertBox, "Saved. Every portal will pick this up on next load.", "success");
+      } catch (err) {
+        showAlert(alertBox, err.message);
+      }
+    });
+
+    document.getElementById("saveRankIconsBtn").addEventListener("click", async () => {
+      const alertBox = document.getElementById("alertBox");
+      const rank_icons = [1, 2, 3].map((n) => document.getElementById(`rankIcon${n}`).value.trim());
+      try {
+        await Api.request("admin", "/admin/settings/update", { method: "POST", body: { rank_icons } });
+        showAlert(alertBox, "Rank icons saved.", "success");
       } catch (err) {
         showAlert(alertBox, err.message);
       }

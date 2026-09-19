@@ -658,13 +658,18 @@ admin.get("/analytics/overview", async (c) => {
 // General settings: tuition name + brand color shown across every portal.
 // ---------------------------------------------------------------------------
 admin.post("/settings/update", async (c) => {
-  const { tuition_name, brand_color } = await c.req.json<{ tuition_name?: string; brand_color?: string }>();
+  const { tuition_name, brand_color, rank_icons } = await c.req.json<{ tuition_name?: string; brand_color?: string; rank_icons?: string[] }>();
 
   if (tuition_name !== undefined && !tuition_name.trim()) {
     return fail(c, "Tuition name can't be empty", 400);
   }
   if (brand_color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(brand_color)) {
     return fail(c, "Brand color must be a hex color like #3654e0", 400);
+  }
+  if (rank_icons !== undefined) {
+    if (!Array.isArray(rank_icons) || rank_icons.length !== 3 || rank_icons.some((i) => typeof i !== "string" || [...i.trim()].length > 8)) {
+      return fail(c, "rank_icons must be 3 entries of at most 8 characters each", 400);
+    }
   }
 
   const updates: [string, string][] = [];
@@ -676,7 +681,21 @@ admin.post("/settings/update", async (c) => {
       .bind(key, value).run();
   }
 
-  return ok(c, { updated: updates.map(([key]) => key) });
+  // A blank rank icon clears the override so the default medal comes back.
+  if (rank_icons) {
+    for (let i = 0; i < 3; i++) {
+      const key = `rank_${i + 1}_icon`;
+      const value = rank_icons[i].trim();
+      if (value) {
+        await c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+          .bind(key, value).run();
+      } else {
+        await c.env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(key).run();
+      }
+    }
+  }
+
+  return ok(c, { updated: updates.map(([key]) => key), rank_icons_updated: !!rank_icons });
 });
 
 // Read-only for the tuition's own admin — only a vendor (see routes/vendor.ts)

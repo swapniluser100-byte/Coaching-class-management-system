@@ -6,15 +6,17 @@ const publicRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 export const DEFAULT_TUITION_NAME = "Tuition Management System";
 export const DEFAULT_BRAND_COLOR = "#3654e0";
+export const DEFAULT_RANK_ICONS = ["🥇", "🥈", "🥉"];
 export const LOGO_R2_KEY = "branding/logo";
 
 // No auth — every portal's login/landing page needs this before anyone is signed in.
 publicRoutes.get("/settings", async (c) => {
-  const { results } = await c.env.DB.prepare("SELECT key, value FROM settings WHERE key IN ('tuition_name', 'brand_color', 'logo_updated_at')").all<{ key: string; value: string }>();
+  const { results } = await c.env.DB.prepare("SELECT key, value FROM settings WHERE key IN ('tuition_name', 'brand_color', 'logo_updated_at', 'rank_1_icon', 'rank_2_icon', 'rank_3_icon')").all<{ key: string; value: string }>();
   const map = Object.fromEntries(results.map((r) => [r.key, r.value]));
   return ok(c, {
     tuition_name: map.tuition_name || DEFAULT_TUITION_NAME,
     brand_color: map.brand_color || DEFAULT_BRAND_COLOR,
+    rank_icons: [1, 2, 3].map((n) => map[`rank_${n}_icon`] || DEFAULT_RANK_ICONS[n - 1]),
     logo_url: map.logo_updated_at ? `/public/logo?v=${encodeURIComponent(map.logo_updated_at)}` : null,
   });
 });
