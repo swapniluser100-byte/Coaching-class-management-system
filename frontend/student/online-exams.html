@@ -6,16 +6,25 @@
 <title>Exam History · Student</title>
 <link rel="stylesheet" href="../shared/css/styles.css" />
 <style>
-  .exam-tile-pending { border-color: var(--color-primary); border-left-width: 3px; background: color-mix(in srgb, var(--color-primary) 6%, white); }
-  .exam-tile-medal-1 { border-color: #d4af37; border-left-width: 3px; background: color-mix(in srgb, #d4af37 8%, white); }
-  .exam-tile-medal-2 { border-color: #9aa0a6; border-left-width: 3px; background: color-mix(in srgb, #9aa0a6 8%, white); }
-  .exam-tile-medal-3 { border-color: #cd7f32; border-left-width: 3px; background: color-mix(in srgb, #cd7f32 8%, white); }
-  .exam-tile { display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: stretch; }
-  .exam-rank-cell { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 96px; border-radius: 8px; overflow: hidden; font-weight: 800; font-size: 40px; line-height: 1; color: var(--color-text-muted); }
-  .exam-rank-cell.top { font-size: 64px; }
-  .exam-rank-cell.top > img { width: 100%; height: 100%; }
-  .exam-rank-cell .rank-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
-  @media (max-width: 480px) { .exam-tile { grid-template-columns: 84px 1fr; gap: 12px; } .exam-rank-cell { font-size: 32px; } }
+  .hist-header { display: flex; align-items: center; gap: 14px; }
+  .hist-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--color-bg); border: 2px solid var(--color-border); }
+  .hist-name { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--color-bg); color: var(--color-text-muted); }
+  .pill.pill-avg { background: var(--color-success-bg); color: var(--color-success); }
+  .exam-tile { display: grid; grid-template-columns: 72px 1fr; gap: 14px; align-items: center; }
+  .exam-tile.exam-tile-top { background: linear-gradient(135deg, #2f9e44, #56b96a); border-color: #2f9e44; color: #fff; }
+  .exam-tile.exam-tile-top .text-muted, .exam-tile.exam-tile-top h3 { color: #fff; }
+  .exam-tile.exam-tile-top .exam-divider { border-top-color: rgba(255, 255, 255, .35); }
+  .exam-rank-cell { width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 44px; line-height: 1; color: var(--color-text-muted); text-align: center; }
+  .exam-rank-cell.top { font-size: 56px; }
+  .exam-rank-cell > img { width: 100%; height: 100%; object-fit: contain; }
+  .exam-rank-cell .rank-label { display: block; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+  .exam-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .exam-status { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .exam-score { font-weight: 700; font-size: 17px; white-space: nowrap; }
+  .exam-divider { border-top: 1px solid var(--color-border); margin-top: 10px; padding-top: 8px; font-size: 13px; }
+  @media (max-width: 480px) { .exam-tile { grid-template-columns: 56px 1fr; gap: 10px; } .exam-rank-cell { width: 56px; height: 56px; font-size: 34px; } }
 </style>
 </head>
 <body>
@@ -29,6 +38,13 @@
     renderStudentShell("online-exams.html", `
       <h1>Exam History</h1>
       <div id="alertBox"></div>
+      <div class="card hist-header" id="histHeader" style="display:none;">
+        <img class="hist-avatar" id="histAvatar" alt="" />
+        <div>
+          <p class="hist-name" id="histName"></p>
+          <div class="pill-row" id="histPills"></div>
+        </div>
+      </div>
       <div id="examsWrap"><p class="text-muted">Loading…</p></div>
     `);
 
@@ -47,28 +63,28 @@
       return r.exam_type === "online" ? `<span class="badge badge-success">Online</span>` : `<span class="badge badge-muted">Classroom</span>`;
     }
 
+    function isCompleted(r) {
+      return r.marks_obtained != null;
+    }
+
     function rankCell(r) {
-      if (isPending(r) || r.marks_obtained == null || !r.rank) return `<div class="exam-rank-cell">—</div>`;
+      if (!isCompleted(r) || !r.rank) return `<div class="exam-rank-cell"></div>`;
       if (r.rank <= 3) return `<div class="exam-rank-cell top">${Branding.rankIcon(r.rank, { fill: true })}</div>`;
       return `<div class="exam-rank-cell"><div><span class="rank-label">Rank</span>${r.rank}</div></div>`;
     }
 
-    function marksBlock(r) {
+    function statusBlock(r) {
       if (isPending(r)) {
         if (r.window_status === "upcoming") return `<span class="badge badge-muted">Opens ${new Date(r.starts_at).toLocaleString()}</span>`;
         return r.attempt_status === "in_progress" ? `<span class="badge badge-warning">In progress</span>` : `<span class="badge badge-success">Open now</span>`;
       }
-      if (r.marks_obtained != null) {
-        return `
-          <div class="value" style="font-size:20px;">${r.marks_obtained}/${r.total_marks}</div>
-        `;
-      }
-      return `<span class="text-muted">Pending</span>`;
+      if (isCompleted(r)) return `<span class="exam-score">Score: ${r.marks_obtained} / ${r.total_marks}</span>`;
+      return `<span class="badge badge-muted">Pending</span>`;
     }
 
     function tileClass(r) {
-      if (isPending(r)) return "exam-tile-pending";
-      return r.rank >= 1 && r.rank <= 3 ? `exam-tile-medal-${r.rank}` : "";
+      if (isCompleted(r) && r.rank >= 1 && r.rank <= 3) return "exam-tile-top";
+      return isPending(r) ? "exam-tile-pending" : "";
     }
 
     function actionButton(r) {
@@ -81,10 +97,36 @@
       return "";
     }
 
+    function renderHeader(profile, exams) {
+      const done = exams.filter(isCompleted);
+      const avg = done.length
+        ? Math.round(done.reduce((sum, r) => sum + (r.total_marks ? (r.marks_obtained / r.total_marks) * 100 : 0), 0) / done.length)
+        : null;
+      document.getElementById("histName").textContent = profile.name;
+      document.getElementById("histPills").innerHTML =
+        (avg != null ? `<span class="pill pill-avg">Avg Score: ${avg}%</span>` : "") +
+        `<span class="pill">Completed: ${done.length}</span>` +
+        `<span class="pill">Pending: ${exams.length - done.length}</span>`;
+      document.getElementById("histHeader").style.display = "";
+      const avatar = document.getElementById("histAvatar");
+      if (profile.photo_url) {
+        Api.request("student", `/photos/${profile.photo_url}`, { raw: true })
+          .then((res) => res.blob())
+          .then((blob) => { avatar.src = URL.createObjectURL(blob); })
+          .catch(() => { avatar.style.visibility = "hidden"; });
+      } else {
+        avatar.style.visibility = "hidden";
+      }
+    }
+
     (async () => {
       try {
         await Branding.load();
-        const exams = await Api.request("student", "/student/exams/history");
+        const [exams, profile] = await Promise.all([
+          Api.request("student", "/student/exams/history"),
+          Api.request("student", "/student/profile"),
+        ]);
+        renderHeader(profile, exams);
         const wrap = document.getElementById("examsWrap");
         if (exams.length === 0) {
           wrap.innerHTML = `<p class="text-muted">No exams yet.</p>`;
@@ -94,11 +136,17 @@
           <div class="card exam-tile ${tileClass(r)}">
             ${rankCell(r)}
             <div>
-              <h3 class="mb-0">${escapeHtml(r.exam_name)}</h3>
-              <p class="text-muted mb-0" style="font-size:13px;">${dateTimeText(r)} · ${typeBadge(r)}</p>
-              ${r.remarks ? `<p class="text-muted mb-0 mt-8" style="font-size:13px;"><strong>Remarks:</strong> ${escapeHtml(r.remarks)}</p>` : ""}
-              <div class="mt-8">${marksBlock(r)}</div>
-              <div class="mt-8">${actionButton(r)}</div>
+              <div class="exam-main">
+                <div>
+                  <h3 class="mb-0">${escapeHtml(r.exam_name)}</h3>
+                  <p class="text-muted mb-0" style="font-size:13px;">${dateTimeText(r)} · ${r.exam_type === "online" ? "Online" : "Classroom"}</p>
+                </div>
+                <div class="exam-status">
+                  ${statusBlock(r)}
+                  ${actionButton(r)}
+                </div>
+              </div>
+              ${r.remarks ? `<div class="exam-divider"><strong>Remarks:</strong> ${escapeHtml(r.remarks)}</div>` : ""}
             </div>
           </div>
         `).join("");
