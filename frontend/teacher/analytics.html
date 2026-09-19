@@ -12,7 +12,6 @@
   <script src="../shared/js/api.js"></script>
   <script src="../shared/js/icons.js"></script>
   <script src="js/common.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script>
     requireTeacherAuth();
     renderTeacherShell("analytics.html", `
@@ -21,10 +20,6 @@
       <div class="card">
         <label>Batch</label>
         <select id="batchSelect"></select>
-      </div>
-      <div class="card">
-        <h2>Daily Attendance (last 60 sessions)</h2>
-        <canvas id="dailyChart" height="220"></canvas>
       </div>
       <div class="card">
         <h2>Attendance Heatmap</h2>
@@ -42,8 +37,6 @@
       </div>
     `);
 
-    let dailyChartInstance = null;
-
     function greenFor(pct) {
       if (pct >= 90) return "#0b6b3a";
       if (pct >= 75) return "#17a06a";
@@ -56,19 +49,6 @@
       const { dailySummary, studentHistory } = await Api.request("tutor", `/tutor/analytics/${batchId}`);
 
       const sorted = [...dailySummary].reverse();
-      if (dailyChartInstance) dailyChartInstance.destroy();
-      dailyChartInstance = new Chart(document.getElementById("dailyChart"), {
-        type: "line",
-        data: {
-          labels: sorted.map((d) => d.date),
-          datasets: [
-            { label: "Present", data: sorted.map((d) => d.present), borderColor: "#17a06a", backgroundColor: "#17a06a", tension: 0.3 },
-            { label: "Absent", data: sorted.map((d) => d.absent), borderColor: "#d6412f", backgroundColor: "#d6412f", tension: 0.3 },
-          ],
-        },
-        options: { scales: { y: { beginAtZero: true } } },
-      });
-
       const heatmap = document.getElementById("heatmap");
       heatmap.innerHTML = sorted.map((d) => {
         const total = d.present + d.absent;
