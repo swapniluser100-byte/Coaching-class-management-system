@@ -6,6 +6,9 @@ import { hashPassword, verifyPassword, newId, randomExamCode } from "../lib/cryp
 import { issueJwt } from "../lib/jwt";
 import { LOGO_R2_KEY, rankImageKey } from "./public";
 
+// Every new student starts with this PIN; the admin can change it per student.
+const DEFAULT_STUDENT_PIN = "0000";
+
 const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // ---------------------------------------------------------------------------
@@ -79,8 +82,8 @@ admin.post("/student/create", async (c) => {
   const id = newId("stu");
   try {
     await c.env.DB.prepare(
-      "INSERT INTO students (id, name, phone, parent_phone, class_level) VALUES (?, ?, ?, ?, ?)"
-    ).bind(id, b.name, b.phone, b.parent_phone || null, b.class_level || null).run();
+      "INSERT INTO students (id, name, phone, parent_phone, class_level, pin_hash) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(id, b.name, b.phone, b.parent_phone || null, b.class_level || null, await hashPassword(DEFAULT_STUDENT_PIN)).run();
   } catch {
     return fail(c, "A student with this phone number already exists", 409);
   }
