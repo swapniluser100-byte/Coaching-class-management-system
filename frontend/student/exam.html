@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="../shared/css/styles.css" />
 <style>
   .medal-hero { font-size: 56px; line-height: 1; margin-bottom: 2px; }
+  .medal-hero img { height: 1.2em; width: auto; }
   .medal-hero.celebrate { animation: medal-pop 0.6s cubic-bezier(.34, 1.56, .64, 1); }
   @keyframes medal-pop {
     0% { transform: scale(0) rotate(-25deg); opacity: 0; }
@@ -21,11 +22,34 @@
   .result-card-medal-2 { border-color: #9aa0a6; background: color-mix(in srgb, #9aa0a6 6%, white); }
   .result-card-medal-3 { border-color: #cd7f32; background: color-mix(in srgb, #cd7f32 6%, white); }
 
-  .top-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
-  .top-row:last-child { border-bottom: none; }
-  .top-row-medal { font-size: 22px; width: 28px; text-align: center; flex-shrink: 0; }
-  .top-row-name { flex: 1; font-weight: 600; }
-  .top-row-marks { font-weight: 700; flex-shrink: 0; }
+  .lookup-head { text-align: center; margin-bottom: 16px; }
+  .lookup-head h1 { margin-bottom: 6px; }
+  .lookup-head p { margin: 0; color: var(--color-text-muted); }
+  .lookup-form { display: flex; gap: 10px; margin-bottom: 16px; }
+  .lookup-form input { flex: 1; min-width: 0; text-transform: uppercase; margin: 0; }
+  .lookup-form .btn { flex-shrink: 0; }
+
+  .exam-head { display: flex; align-items: center; gap: 12px; }
+  .exam-head-icon { color: var(--color-primary); flex-shrink: 0; display: flex; }
+  .exam-head h2 { margin: 0; font-size: 17px; }
+  .exam-head p { margin: 2px 0 0; font-size: 13px; color: var(--color-text-muted); }
+  .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 14px; padding: 12px 0; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px; }
+  .stat-cell { text-align: center; padding: 0 6px; border-left: 1px solid var(--color-border); }
+  .stat-cell:first-child { border-left: none; }
+  .stat-cell .stat-value { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 22px; font-weight: 700; color: var(--color-text); }
+  .stat-cell .stat-value svg { color: var(--color-text-muted); }
+  .stat-cell .stat-label { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+
+  .top-card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .top-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-top: 1px solid var(--color-border); }
+  .top-row-rank { width: 32px; height: 32px; border: 1.5px solid var(--color-text-muted); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; overflow: hidden; }
+  .top-row-rank.has-image { border: none; border-radius: 0; width: 36px; height: 36px; }
+  .top-row-rank img { width: 100%; height: 100%; object-fit: contain; }
+  .top-row-name { flex: 1; font-weight: 500; }
+  .top-row-marks { font-weight: 600; flex-shrink: 0; padding-right: 8px; }
+  @media (max-width: 480px) {
+    .stat-cell .stat-value { font-size: 18px; flex-direction: column; gap: 2px; }
+  }
 </style>
 </head>
 <body>
@@ -37,20 +61,18 @@
   <script>
     requireStudentAuth();
     renderStudentShell("exam.html", `
-      <h1>View Exam Marks</h1>
-      <div id="alertBox"></div>
-      <div class="card">
-        <label>Exam Code</label>
-        <form id="examForm">
-          <div class="flex gap-8">
-            <input id="examCode" placeholder="e.g. K7M2QWXT9" style="text-transform:uppercase;" required />
-            <button class="btn" type="submit">${iconSvg("search")} View</button>
-          </div>
-        </form>
+      <div class="lookup-head">
+        <h1>View Exam Marks</h1>
+        <p>Enter your exam code to view detailed results.</p>
       </div>
+      <div id="alertBox"></div>
+      <form id="examForm" class="lookup-form">
+        <input id="examCode" placeholder="e.g. K7M2QWXT9" required />
+        <button class="btn" type="submit">View Results</button>
+      </form>
       <div class="card hidden" id="resultCard"></div>
-      <div class="card hidden" id="topCard">
-        <h2>🏆 Top 3</h2>
+      <div class="card top-card hidden" id="topCard">
+        <h3>Top 3 Performers</h3>
         <div id="topList"></div>
       </div>
     `);
@@ -62,36 +84,23 @@
       return null;
     }
 
-    const PLACEHOLDER_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23e2e6ef'/%3E%3C/svg%3E";
-
-    async function renderTopStudents(topStudents) {
+    function renderTopStudents(topStudents) {
       const topCard = document.getElementById("topCard");
       if (!topStudents || topStudents.length === 0) {
         topCard.classList.add("hidden");
         return;
       }
       topCard.classList.remove("hidden");
-      document.getElementById("topList").innerHTML = topStudents.map((s, i) => {
-        const medal = medalFor(s.rank);
+      document.getElementById("topList").innerHTML = topStudents.map((s) => {
+        const image = s.rank <= 3 && Branding.hasRankImage(s.rank);
         return `
           <div class="top-row">
-            <img class="avatar" id="topPhoto${i}" style="width:44px; height:44px;" src="${PLACEHOLDER_AVATAR}" />
-            <span class="top-row-medal">${medal ? medal.icon : `#${s.rank}`}</span>
+            <span class="top-row-rank ${image ? "has-image" : ""}">${image ? Branding.rankIcon(s.rank, { fill: true }) : s.rank}</span>
             <span class="top-row-name">${escapeHtml(s.name)}</span>
             <span class="top-row-marks">${s.marks_obtained}</span>
           </div>
         `;
       }).join("");
-
-      topStudents.forEach(async (s, i) => {
-        if (!s.photo_url) return;
-        try {
-          const res = await Api.request("student", `/photos/${s.photo_url}`, { raw: true });
-          const blob = await res.blob();
-          const img = document.getElementById(`topPhoto${i}`);
-          if (img) img.src = URL.createObjectURL(blob);
-        } catch {}
-      });
     }
 
     document.getElementById("examForm").addEventListener("submit", async (e) => {
@@ -110,6 +119,12 @@
         const medal = medalFor(data.rank);
         resultCard.classList.remove("hidden");
         resultCard.className = `card ${medal ? medal.tile : ""}`;
+        const examDate = new Date(`${data.exam.exam_date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+        const stat = (icon, value, label) => `
+          <div class="stat-cell">
+            <div class="stat-value">${iconSvg(icon, 20)}<span>${value}</span></div>
+            <div class="stat-label">${label}</div>
+          </div>`;
         resultCard.innerHTML = `
           ${medal ? `
             <div class="text-center mb-16">
@@ -117,30 +132,23 @@
               <p class="medal-message ${medal.cls}">🎉 You ranked ${medal.label} in this exam!</p>
             </div>
           ` : ""}
-          <h2>${escapeHtml(data.exam.exam_name)}</h2>
-          <p class="text-muted">${data.exam.exam_date} · Total marks: ${data.exam.total_marks}</p>
-          <div class="grid grid-2 mt-16">
-            <div class="stat-tile card ${medal ? medal.tile : ""}">
-              <div class="value">${data.marks_obtained ?? "—"}</div>
-              <div class="label">Your Marks</div>
-            </div>
-            <div class="stat-tile card ${medal ? medal.tile : ""}">
-              <div class="value">${medal ? `${medal.icon} ` : ""}${data.rank ?? "—"}</div>
-              <div class="label">Rank ${data.total_students ? `(of ${data.total_students})` : ""}</div>
-            </div>
-            <div class="stat-tile card">
-              <div class="value">${data.batch_average ?? "—"}</div>
-              <div class="label">Batch Average</div>
-            </div>
-            <div class="stat-tile card">
-              <div class="value">${data.topper_marks ?? "—"}</div>
-              <div class="label">Topper's Marks</div>
+          <div class="exam-head">
+            <span class="exam-head-icon">${iconSvg("graduation-cap", 32)}</span>
+            <div>
+              <h2>${escapeHtml(data.exam.exam_name)}</h2>
+              <p>${examDate} · Total Marks: ${data.exam.total_marks}</p>
             </div>
           </div>
-          ${data.remarks ? `<p class="mt-16"><strong>Remarks:</strong> ${escapeHtml(data.remarks)}</p>` : ""}
+          <div class="stat-strip">
+            ${stat("graduation-cap", data.marks_obtained ?? "—", "Your Marks")}
+            ${stat("award", data.rank ?? "—", `Rank${data.total_students ? ` (of ${data.total_students})` : ""}`)}
+            ${stat("bar-chart", data.batch_average ?? "—", "Batch Avg")}
+            ${stat("star", data.topper_marks ?? "—", "Topper's Marks")}
+          </div>
+          ${data.remarks ? `<p class="mt-16 mb-0"><strong>Remarks:</strong> ${escapeHtml(data.remarks)}</p>` : ""}
           ${data.marks_obtained == null ? `<div class="alert alert-info mt-16">Marks for this exam haven't been uploaded yet.</div>` : ""}
         `;
-        await renderTopStudents(data.top_students);
+        renderTopStudents(data.top_students);
       } catch (err) {
         showAlert(alertBox, err.message);
       }

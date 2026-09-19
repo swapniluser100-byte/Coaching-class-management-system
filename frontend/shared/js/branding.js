@@ -17,6 +17,10 @@ const Branding = (() => {
   // ranks should `await Branding.load()` first.
   // With { fill: true } the image stretches to fill its (sized) container
   // instead of scaling with the surrounding text.
+  function hasRankImage(rank) {
+    return !!rankImages[rank - 1];
+  }
+
   function rankIcon(rank, { fill = false } = {}) {
     if (!(rank >= 1 && rank <= 3)) return null;
     const image = rankImages[rank - 1];
@@ -87,7 +91,7 @@ const Branding = (() => {
     return loadPromise;
   }
 
-  return { load, applyName, applyColor, applyLogo, rankIcon };
+  return { load, applyName, applyColor, applyLogo, rankIcon, hasRankImage };
 })();
 
 Branding.load();
