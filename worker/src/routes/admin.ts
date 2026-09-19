@@ -4,7 +4,7 @@ import { ok, fail } from "../lib/response";
 import { requireAuth } from "../middleware/auth";
 import { hashPassword, verifyPassword, newId, randomExamCode } from "../lib/crypto";
 import { issueJwt } from "../lib/jwt";
-import { LOGO_R2_KEY } from "./public";
+import { LOGO_R2_KEY, rankImageKey } from "./public";
 
 const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -724,6 +724,34 @@ admin.post("/settings/logo", async (c) => {
     .bind(updatedAt).run();
 
   return ok(c, { logo_url: `/public/logo?v=${encodeURIComponent(updatedAt)}` });
+});
+
+const RANK_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+admin.post("/settings/rank-image/:rank", async (c) => {
+  const rank = Number(c.req.param("rank"));
+  if (![1, 2, 3].includes(rank)) return fail(c, "rank must be 1, 2 or 3", 400);
+  const contentType = (c.req.header("Content-Type") || "").split(";")[0].trim();
+  if (!RANK_IMAGE_TYPES.includes(contentType)) return fail(c, "Upload a PNG, JPEG, WebP or GIF image", 400);
+
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength === 0) return fail(c, "Empty file", 400);
+  if (body.byteLength > 1024 * 1024) return fail(c, "Image too large (max 1MB)", 400);
+
+  await c.env.PHOTOS_BUCKET.put(rankImageKey(rank), body, { httpMetadata: { contentType } });
+  const updatedAt = new Date().toISOString();
+  await c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+    .bind(`rank_${rank}_image_at`, updatedAt).run();
+
+  return ok(c, { rank, image_url: `/public/rank-image/${rank}?v=${encodeURIComponent(updatedAt)}` });
+});
+
+admin.post("/settings/rank-image/:rank/remove", async (c) => {
+  const rank = Number(c.req.param("rank"));
+  if (![1, 2, 3].includes(rank)) return fail(c, "rank must be 1, 2 or 3", 400);
+  await c.env.PHOTOS_BUCKET.delete(rankImageKey(rank));
+  await c.env.DB.prepare("DELETE FROM settings WHERE key = ?").bind(`rank_${rank}_image_at`).run();
+  return ok(c, { removed: true });
 });
 
 admin.post("/settings/logo/remove", async (c) => {

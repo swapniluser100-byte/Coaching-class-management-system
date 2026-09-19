@@ -10,11 +10,16 @@
 const Branding = (() => {
   let loadPromise = null;
   let rankIcons = ["🥇", "🥈", "🥉"];
+  let rankImages = [null, null, null];
 
-  // Icon shown for a top-3 rank (admin-configurable); null for anything else.
-  // Pages that render ranks should `await Branding.load()` first.
+  // HTML for a top-3 rank badge: the uploaded image if one is set, otherwise
+  // the configured emoji/text; null for any other rank. Pages that render
+  // ranks should `await Branding.load()` first.
   function rankIcon(rank) {
-    return rank >= 1 && rank <= 3 ? rankIcons[rank - 1] : null;
+    if (!(rank >= 1 && rank <= 3)) return null;
+    const image = rankImages[rank - 1];
+    if (image) return `<img src="${window.API_BASE_URL}${image}" alt="Rank ${rank}" style="height:1.1em;width:auto;vertical-align:-0.2em;" />`;
+    return String(rankIcons[rank - 1]).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   }
 
   function hexShade(hex, amount) {
@@ -67,6 +72,7 @@ const Branding = (() => {
           applyName(data.tuition_name);
           applyLogo(data.logo_url);
           if (Array.isArray(data.rank_icons) && data.rank_icons.length === 3) rankIcons = data.rank_icons;
+          if (Array.isArray(data.rank_images) && data.rank_images.length === 3) rankImages = data.rank_images;
           return data;
         })
         .catch(() => ({}));

@@ -40,13 +40,25 @@
       </div>
       <div class="card">
         <h2>Rank Icons</h2>
-        <p>Shown next to the top 3 ranks on exam results and mark sheets. Use an emoji or a short text (up to 8 characters). Leave blank to use the default medal.</p>
+        <p>Shown next to the top 3 ranks on exam results and mark sheets. Upload an image (PNG, JPEG, WebP or GIF, max 1MB) for each rank, or leave it and use an emoji / short text instead. With neither, the default medal is used.</p>
         <div class="grid grid-3">
-          <div><label>1st Rank</label><input id="rankIcon1" maxlength="16" placeholder="🥇" /></div>
-          <div><label>2nd Rank</label><input id="rankIcon2" maxlength="16" placeholder="🥈" /></div>
-          <div><label>3rd Rank</label><input id="rankIcon3" maxlength="16" placeholder="🥉" /></div>
+          ${[1, 2, 3].map((n) => `
+            <div>
+              <label>${["1st", "2nd", "3rd"][n - 1]} Rank</label>
+              <div style="height:52px;display:flex;align-items:center;">
+                <img id="rankImg${n}" class="hidden" alt="" style="height:44px;max-width:100%;object-fit:contain;" />
+                <span id="rankNoImg${n}" class="text-muted" style="font-size:12px;">No image</span>
+              </div>
+              <input type="file" id="rankFile${n}" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
+              <div class="flex gap-8 mt-8">
+                <button class="btn btn-secondary btn-sm" type="button" onclick="document.getElementById('rankFile${n}').click()">Upload</button>
+                <button class="btn btn-danger btn-sm hidden" type="button" id="rankRemove${n}">Remove</button>
+              </div>
+              <label class="mt-8">Fallback emoji / text</label>
+              <input id="rankIcon${n}" maxlength="16" placeholder="${["🥇", "🥈", "🥉"][n - 1]}" />
+            </div>`).join("")}
         </div>
-        <button class="btn mt-16" id="saveRankIconsBtn">Save Rank Icons</button>
+        <button class="btn mt-16" id="saveRankIconsBtn">Save Fallback Text</button>
       </div>
       <div class="card">
         <h2>Plan / Renewal</h2>
@@ -72,6 +84,14 @@
     `);
     setPageTitle("Settings");
 
+    function refreshRankImage(n, imageUrl) {
+      const img = document.getElementById(`rankImg${n}`);
+      img.classList.toggle("hidden", !imageUrl);
+      if (imageUrl) img.src = `${window.API_BASE_URL}${imageUrl}`;
+      document.getElementById(`rankNoImg${n}`).classList.toggle("hidden", !!imageUrl);
+      document.getElementById(`rankRemove${n}`).classList.toggle("hidden", !imageUrl);
+    }
+
     function refreshLogoPreview(logoUrl) {
       const img = document.getElementById("logoPreview");
       const noText = document.getElementById("noLogoText");
@@ -95,6 +115,7 @@
         document.getElementById("brandColor").value = settings.brand_color;
         document.getElementById("brandColorHex").value = settings.brand_color;
         refreshLogoPreview(settings.logo_url);
+        settings.rank_images.forEach((url, i) => refreshRankImage(i + 1, url));
         settings.rank_icons.forEach((icon, i) => { document.getElementById(`rankIcon${i + 1}`).value = icon; });
       } catch (err) {
         showAlert(document.getElementById("alertBox"), err.message);
@@ -168,6 +189,32 @@
       } catch (err) {
         showAlert(alertBox, err.message);
       }
+    });
+
+    [1, 2, 3].forEach((n) => {
+      document.getElementById(`rankFile${n}`).addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        const alertBox = document.getElementById("alertBox");
+        try {
+          const data = await Api.request("admin", `/admin/settings/rank-image/${n}`, { method: "POST", body: file, isForm: true });
+          refreshRankImage(n, data.image_url);
+          showAlert(alertBox, "Rank image updated.", "success");
+        } catch (err) {
+          showAlert(alertBox, err.message);
+        }
+      });
+      document.getElementById(`rankRemove${n}`).addEventListener("click", async () => {
+        const alertBox = document.getElementById("alertBox");
+        try {
+          await Api.request("admin", `/admin/settings/rank-image/${n}/remove`, { method: "POST" });
+          refreshRankImage(n, null);
+          showAlert(alertBox, "Rank image removed.", "success");
+        } catch (err) {
+          showAlert(alertBox, err.message);
+        }
+      });
     });
 
     document.getElementById("saveRankIconsBtn").addEventListener("click", async () => {
